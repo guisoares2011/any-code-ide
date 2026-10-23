@@ -15,18 +15,11 @@ export const gitState = createStore<{ status: GitStatus; byPath: ReadonlyMap<str
 let timer: ReturnType<typeof setTimeout> | null = null
 let installed = false
 
-/**
- * `status` is the current project's (Commit, branch widget); `byPath` covers every project of the
- * window, so the Project view and tabs color the files of attached projects too.
- */
 export async function refreshGit(): Promise<void> {
-  const { project, projects } = workbench.get()
-  if (!project) return
-  const others = projects.filter((p) => p.root !== project.root)
-  const [status, ...rest] = await Promise.all([project, ...others].map((p) => window.anycode.invoke('git:status', p.root)))
-  if (!status || workbench.get().project?.root !== project.root) return
-  const files = [status, ...rest].flatMap((s) => s.files)
-  gitState.set({ status, byPath: new Map(files.map((f) => [f.path, f])) })
+  const root = workbench.get().project?.root
+  if (!root) return
+  const status = await window.anycode.invoke('git:status', root)
+  gitState.set({ status, byPath: new Map(status.files.map((f) => [f.path, f])) })
 }
 
 function scheduleRefresh(): void {
@@ -43,13 +36,11 @@ export function installGitStatus(): void {
   window.anycode.on('fs:changed', scheduleRefresh)
   // A different project is shown: its status replaces the previous one.
   let root = workbench.get().project?.root
-  let count = workbench.get().projects.length
   workbench.subscribe(() => {
-    const { project, projects } = workbench.get()
-    if (project?.root === root && projects.length === count) return
-    // Switching follows the active tab, so the old status stays until the new one arrives (no flicker).
-    root = project?.root
-    count = projects.length
+    const next = workbench.get().project?.root
+    if (next === root) return
+    root = next
+    gitState.set({ status: { repository: false, branch: null, files: [] }, byPath: new Map() })
     void refreshGit()
   })
   void refreshGit()

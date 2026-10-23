@@ -51,6 +51,8 @@ interface ProjectWindow {
   roots: string[]
   current: string | null
   bridge: IdeBridgeServer
+  /** Projects moved in from another window: their agent resumes its conversation (claude --continue). */
+  resume: string[]
 }
 
 /** Open windows by webContents id, in creation order. */
@@ -103,7 +105,7 @@ function persist(): void {
 }
 
 /** Opens a window with these projects (those already open in another window are skipped). */
-async function openWindow(roots: readonly string[], current: string | null): Promise<ProjectWindow> {
+async function openWindow(roots: readonly string[], current: string | null, resume: string[] = []): Promise<ProjectWindow> {
   const opened = roots.filter((root) => !ownerOf(resolve(root))).flatMap((root) => openProject(root)?.root ?? [])
   const window = createBrowserWindow()
   const entry: ProjectWindow = {
@@ -112,6 +114,7 @@ async function openWindow(roots: readonly string[], current: string | null): Pro
     roots: opened,
     current: current && opened.includes(current) ? current : (opened[0] ?? null),
     bridge: createBridge({ version: app.getVersion(), workspaceFolders: () => entry.roots, renderer: window.webContents }),
+    resume,
   }
   windows.set(entry.contents.id, entry)
   for (const root of opened) watch(root)
@@ -184,9 +187,9 @@ const recent = new RecentProjectsStore(join(app.getPath('userData'), 'recent-pro
 
 handleFrom('project:initial', async (sender) => {
   const entry = windowOf(sender)
-  if (!entry) return { projects: [], current: null }
+  if (!entry) return { projects: [], current: null, resume: [] }
   if (entry.current) await recent.touch(entry.current)
-  return { projects: entry.roots.map(projectInfo), current: entry.current }
+  return { projects: entry.roots.map(projectInfo), current: entry.current, resume: entry.resume }
 })
 onSendFrom('project:activated', (sender, root) => {
   const entry = windowOf(sender)
@@ -268,6 +271,32 @@ onSendFrom('window:cycle', (sender, delta) => {
   const index = list.findIndex((w) => w.contents === sender)
   const next = list[(index + delta + list.length) % list.length]
   if (next && next.contents !== sender) focusWindow(next)
+})
+// Merge All Project Windows: the other windows' projects move here as tabs. Their windows close
+// without releasing them, so roots, watchers and ESLint stay; terminals and LSPs restart here.
+handleFrom('window:mergeAll', async (sender) => {
+  const target = windowOf(sender)
+  if (!target) return []
+  const moved: string[] = []
+  for (const other of [...windows.values()]) {
+    if (other === target) continue
+    moved.push(...other.roots)
+    other.roots = []
+    other.window.close()
+  }
+  target.roots.push(...moved)
+  await target.bridge.updateWorkspaceFolders()
+  persist()
+  return moved.map(projectInfo)
+})
+handleFrom('project:moveToNewWindow', async (sender, root) => {
+  const entry = windowOf(sender)
+  if (!entry?.roots.includes(root)) return false
+  entry.roots = entry.roots.filter((r) => r !== root)
+  if (entry.current === root) entry.current = entry.roots[0] ?? null
+  await entry.bridge.updateWorkspaceFolders()
+  await openWindow([root], root, [root])
+  return true
 })
 handle('project:recent', async () => mergeRecent(await recent.read(), readJetBrainsRecent()))
 handleFrom('project:pickFolder', async (sender) => {

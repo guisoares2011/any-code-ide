@@ -63,7 +63,8 @@ button {
 
 .workbench {
   display: grid;
-  grid-template-rows: var(--toolbar-height) 1fr var(--statusbar-height);
+  /* toolbar, project tabs (empty with a single project), body, status bar */
+  grid-template-rows: var(--toolbar-height) auto 1fr var(--statusbar-height);
   height: 100%;
 }
 
@@ -151,6 +152,52 @@ button {
   padding: 0 8px 0 84px; /* room for the traffic lights */
   background: var(--ui-MainToolbar-background);
   -webkit-app-region: drag;
+}
+
+/* Project tabs, as IntelliJ shows merged project windows: equal-width tabs under the toolbar. */
+.project-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 6px;
+  background: var(--ui-MainToolbar-background);
+}
+
+.project-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 4px 0 28px;
+  border-radius: var(--component-radius);
+  color: var(--c-text-muted);
+  cursor: default;
+}
+
+.project-tab:hover {
+  background: var(--ui-EditorTabs-hoverBackground);
+}
+
+.project-tab.selected {
+  background: var(--ui-EditorTabs-underlinedTabBackground);
+  color: var(--c-text-default);
+}
+
+.project-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-tab .tab-close {
+  opacity: 0;
+}
+
+.project-tab:hover .tab-close,
+.project-tab.selected .tab-close {
+  opacity: 1;
 }
 
 .main-toolbar .toolbar-widget,
@@ -310,12 +357,6 @@ button {
   padding: 0 8px;
   border-radius: var(--component-radius);
   color: var(--c-text-default);
-  white-space: nowrap;
-}
-
-.tool-window-project {
-  color: var(--c-text-muted);
-  padding: 0 6px 0 2px;
   white-space: nowrap;
 }
 

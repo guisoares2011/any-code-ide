@@ -37,22 +37,20 @@ describe('workbench state', () => {
 })
 
 describe('multiple projects', () => {
-  it('shares tabs across attached projects and closes a removed project\'s tabs', async () => {
+  it('keeps tabs and tool windows per project', async () => {
     const { addProject, cycleProject, removeProject, switchProject } = await import('./workbench')
     workbench.set({ project: { root: '/a', name: 'a' }, projects: [{ root: '/a', name: 'a' }], tabs: [], activeTab: null })
     openFile('/a/x.ts')
     addProject({ root: '/b', name: 'b' })
     expect(workbench.get().project?.root).toBe('/b')
-    // Attaching keeps what was open, as in IntelliJ.
-    expect(workbench.get().tabs.map((t) => t.name)).toEqual(['x.ts'])
+    expect(workbench.get().tabs).toEqual([])
     openFile('/b/y.ts')
     switchProject('/a')
-    expect(workbench.get().tabs.map((t) => t.name)).toEqual(['x.ts', 'y.ts'])
+    expect(workbench.get().tabs.map((t) => t.name)).toEqual(['x.ts'])
     cycleProject(1)
-    expect(workbench.get().project?.root).toBe('/b')
+    expect(workbench.get().tabs.map((t) => t.name)).toEqual(['y.ts'])
     expect(removeProject('/b')?.root).toBe('/a')
     expect(workbench.get().projects.map((p) => p.root)).toEqual(['/a'])
     expect(workbench.get().tabs.map((t) => t.name)).toEqual(['x.ts'])
-    expect(workbench.get().activeTab).toBe('/a/x.ts')
   })
 })

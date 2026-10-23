@@ -16,7 +16,8 @@ import { installEslint } from './lint/eslint'
 import { installSettings } from './settings/applySettings'
 import { installGitStatus } from './state/git'
 import { installKeymapDispatcher } from './keymap/service'
-import { showTabProject, switchProject, workbench } from './state/workbench'
+import { switchProject, workbench } from './state/workbench'
+import { resumeAgent } from './terminal/TerminalView'
 import { applyIslandsDark } from './theme/applyTheme'
 import { Workbench } from './workbench/Workbench'
 
@@ -31,7 +32,8 @@ async function main(): Promise<void> {
   installMarkdownSupport()
   installTestSupport()
   installEslint()
-  const { projects, current } = await window.anycode.invoke('project:initial')
+  const { projects, current, resume } = await window.anycode.invoke('project:initial')
+  for (const root of resume) resumeAgent(root)
   const project = projects.find((p) => p.root === current) ?? null
   workbench.set({ project, projects })
   // Remember the shown project for the next start and keep the window title in sync.
@@ -45,14 +47,6 @@ async function main(): Promise<void> {
   }
   workbench.subscribe(syncProject)
   syncProject()
-  // The current project follows the active editor tab, so terminal, git and run match the file in view.
-  let lastTab: string | null = null
-  workbench.subscribe(() => {
-    const s = workbench.get()
-    if (s.activeTab === lastTab) return
-    lastTab = s.activeTab
-    if (s.activeTab) showTabProject(s.activeTab)
-  })
   // Another window asked to open a project this one has: show it.
   window.anycode.on('project:reveal', (root) => switchProject(root))
   if (!project) workbench.set({ popup: 'Projects' })

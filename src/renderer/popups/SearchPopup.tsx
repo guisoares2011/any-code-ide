@@ -50,17 +50,6 @@ async function projectFiles(root: string): Promise<string[]> {
   return fileCache.get(root) ?? refresh
 }
 
-/** A file as Go to File matches and shows it: relative to its project, prefixed by the project's name when the window has several. */
-interface SearchFile {
-  path: string
-  display: string
-}
-
-async function windowFiles(projects: readonly ProjectInfo[]): Promise<SearchFile[]> {
-  const lists = await Promise.all(projects.map((p) => projectFiles(p.root)))
-  return projects.flatMap((p, i) => lists[i]!.map((f) => ({ path: `${p.root}/${f}`, display: projects.length > 1 ? `${p.name}/${f}` : f })))
-}
-
 const TITLES: Record<PopupKind, string> = {
   GotoFile: 'Files',
   RecentFiles: 'Recent Files',
@@ -108,29 +97,22 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
   }, [kind, project])
   const registryVersion = useActionRegistryVersion()
   const [query, setQuery] = useState('')
-  const [files, setFiles] = useState<SearchFile[]>([])
+  const [files, setFiles] = useState<string[]>([])
   const [tab, setTab] = useState<Tab>(initialTab(kind))
   const [selected, setSelected] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (kind === 'GotoFile' || kind === 'SearchEverywhere') void windowFiles(openProjects).then(setFiles)
-  }, [openProjects, kind])
+    if (project && (kind === 'GotoFile' || kind === 'SearchEverywhere')) void projectFiles(project.root).then(setFiles)
+  }, [project, kind])
 
   const items = useMemo(() => {
-    // The folder of a file, relative to its project (named when the window has several).
-    const hintFor = (path: string): string => {
-      const owner = openProjects.filter((p) => path.startsWith(`${p.root}/`)).sort((a, b) => b.root.length - a.root.length)[0]
-      if (!owner) return dirname(relativePath(project?.root ?? '/', path))
-      const folder = dirname(relativePath(owner.root, path))
-      // dirname of a relative path keeps a leading "/" ("/src", or "/" at the project root).
-      return openProjects.length > 1 ? (folder === '/' ? owner.name : `${owner.name}${folder}`) : folder
-    }
+    const root = project?.root ?? '/'
     const fileItem = (path: string, group: Item['group'], positions: number[], labelOffset: number): Item => ({
       key: `${group}:${path}`,
       group,
       label: basename(path),
-      hint: hintFor(path),
+      hint: dirname(relativePath(root, path)),
       icon: fileIconName(basename(path)),
       positions,
       labelOffset,
@@ -292,8 +274,8 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
       if (query === '' && kind === 'SearchEverywhere') {
         for (const path of recentFiles.slice(0, 10)) result.push(fileItem(path, 'Recent Files', [], 0))
       } else if (query !== '') {
-        for (const { item, match } of rank(query, files, (f) => f.display, 100)) {
-          result.push(fileItem(item.path, 'Files', match.positions, item.display.lastIndexOf('/') + 1))
+        for (const { item, match } of rank(query, files, (f) => f, 100)) {
+          result.push(fileItem(`${root}/${item}`, 'Files', match.positions, item.lastIndexOf('/') + 1))
         }
       }
     }

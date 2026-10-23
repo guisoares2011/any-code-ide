@@ -20,41 +20,42 @@ test.afterEach(async () => {
 
 const name = (path: string): string => path.split('/').pop()!
 
-test('Attach adds a project to the window: both in the Project view, tabs kept, each with its terminal', async () => {
+test('New Tab opens a project tab: each tab keeps its own editor tabs and terminal', async () => {
   const { page, project } = fixture
   const toolbar = page.locator('.main-toolbar')
   const terminalRows = page.locator('.terminal-host .xterm-rows')
-  const tree = page.getByRole('tree', { name: 'Project' })
+  const projectTabs = page.getByRole('tablist', { name: 'Projects' })
+  const editorTabs = page.locator('.editor-tabs')
 
-  // A file and a terminal command in the first project.
+  // A file and a terminal command in the first project; one project shows no project tabs.
   await page.keyboard.press('Meta+Shift+KeyO')
   await expect(page.getByRole('dialog', { name: 'Files' })).toBeVisible()
   await page.keyboard.type('README.md')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('tab', { name: /README\.md/ })).toBeVisible()
+  await expect(editorTabs.getByRole('tab', { name: /README\.md/ })).toBeVisible()
   await page.locator('.terminal-host').click()
   await page.keyboard.type('echo first-project-marker\n')
   await expect(terminalRows).toContainText('first-project-marker')
+  await expect(projectTabs).toHaveCount(0)
 
   // Open the second project from the project widget by typing its path.
   await toolbar.getByRole('button', { name: name(project) }).click()
   await expect(page.getByRole('dialog', { name: 'Projects' })).toContainText('Open Projects')
   await page.keyboard.type(second)
   await page.keyboard.press('Enter')
-  // IntelliJ's "Open Project" question; Attach keeps both projects in this window.
+  // IntelliJ's "Open Project" question; Enter is New Tab.
   const dialog = page.getByRole('dialog', { name: 'Open Project' })
   await expect(dialog).toContainText(name(second))
-  await dialog.getByRole('button', { name: 'Attach' }).click()
+  await page.keyboard.press('Enter')
   await expect(dialog).toHaveCount(0)
   await expect(toolbar).toContainText(name(second))
 
-  // Both projects are roots of the Project view, the attached one expanded; the open tab stays.
-  await expect(tree.locator(`[data-path="${project}"]`)).toBeVisible()
-  await expect(tree.locator(`[data-path="${second}"]`)).toHaveAttribute('aria-expanded', 'true')
-  await expect(tree.locator(`[data-path="${second}/src"]`)).toBeVisible()
-  await expect(page.getByRole('tab', { name: /README\.md/ })).toBeVisible()
-  // The terminal is the current (attached) project's.
-  await expect(page.locator('.tool-window-project')).toHaveText(name(second))
+  // Two project tabs, the new one selected; its editor tabs, tree and terminal are its own.
+  await expect(projectTabs.getByRole('tab')).toHaveCount(2)
+  await expect(projectTabs.getByRole('tab', { selected: true })).toContainText(name(second))
+  await expect(projectTabs.getByRole('tab', { name: `${name(project)} – README.md` })).toBeVisible()
+  await expect(page.getByRole('tree', { name: 'Project' })).toContainText(name(second))
+  await expect(editorTabs.getByRole('tab', { name: /README\.md/ })).toHaveCount(0)
   await page.locator('.terminal-host').click()
   await page.keyboard.type('pwd\n')
   await expect(terminalRows).toContainText(name(second))
@@ -66,22 +67,57 @@ test('Attach adds a project to the window: both in the Project view, tabs kept, 
   expect(folders.folders.map((f) => f.path).sort()).toEqual([project, second].sort())
   claude.close()
 
-  // Going back to the first project's file makes it current again, with its terminal.
-  await page.getByRole('tab', { name: /README\.md/ }).click()
+  // Back to the first tab: its file and terminal are as they were.
+  await projectTabs.getByRole('tab', { name: new RegExp(`^${name(project)}`) }).click()
   await expect(toolbar).toContainText(name(project))
+  await expect(editorTabs.getByRole('tab', { name: /README\.md/ })).toBeVisible()
   await expect(terminalRows).toContainText('first-project-marker')
 
-  // Go to File searches every project of the window.
-  await page.keyboard.press('Meta+Shift+KeyO')
-  await page.keyboard.type('greeting')
-  const files = page.getByRole('dialog', { name: 'Files' })
-  await expect(files.getByRole('option')).toHaveCount(2)
-  await files.getByRole('option', { name: new RegExp(`${name(second)}/src`) }).click()
-  await expect(toolbar).toContainText(name(second))
-
-  // ⌥⌘` (NextProjectWindow) cycles the attached projects.
+  // ⌥⌘` (NextProjectWindow) cycles the tabs; closing a tab leaves a single project without tabs.
   await page.keyboard.press('Meta+Alt+Backquote')
+  await expect(toolbar).toContainText(name(second))
+  await projectTabs.getByRole('button', { name: `Close ${name(second)}` }).click()
+  await expect(projectTabs).toHaveCount(0)
   await expect(toolbar).toContainText(name(project))
+})
+
+test('Merge All Project Windows brings other windows in as tabs, and Move Tab to New Window takes one out', async () => {
+  const { app, page, project } = fixture
+  await page.locator('.main-toolbar').getByRole('button', { name: name(project) }).click()
+  await page.keyboard.type(second)
+  await page.keyboard.press('Enter')
+  const opened = app.waitForEvent('window')
+  await page.getByRole('dialog', { name: 'Open Project' }).getByRole('button', { name: 'New Window' }).click()
+  const other = await opened
+  await other.waitForSelector('.workbench')
+  await expect(other.locator('.main-toolbar')).toContainText(name(second))
+
+  const findAction = async (text: string): Promise<void> => {
+    await page.locator('.editor-area, .workbench-body').first().click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Meta+Shift+KeyA')
+    await page.keyboard.type(text)
+    await expect(page.locator('.popup-item').first()).toContainText(text)
+    await page.keyboard.press('Enter')
+  }
+
+  await findAction('Merge All Project Windows')
+  await expect.poll(() => app.windows().length).toBe(1)
+  const projectTabs = page.getByRole('tablist', { name: 'Projects' })
+  await expect(projectTabs.getByRole('tab')).toHaveCount(2)
+  // The shown tab stays; the merged project's terminal starts in this window.
+  await expect(page.locator('.main-toolbar')).toContainText(name(project))
+  await projectTabs.getByRole('tab', { name: new RegExp(`^${name(second)}`) }).click()
+  await page.locator('.terminal-host').click()
+  await page.keyboard.type('pwd\n')
+  await expect(page.locator('.terminal-host .xterm-rows')).toContainText(name(second))
+
+  const moved = app.waitForEvent('window')
+  await findAction('Move Tab to New Window')
+  const again = await moved
+  await again.waitForSelector('.workbench')
+  await expect(again.locator('.main-toolbar')).toContainText(name(second))
+  await expect(projectTabs).toHaveCount(0)
+  await expect(page.locator('.main-toolbar')).toContainText(name(project))
 })
 
 test('Close Project returns to the remaining project', async () => {
@@ -89,7 +125,7 @@ test('Close Project returns to the remaining project', async () => {
   await page.locator('.main-toolbar').getByRole('button', { name: name(project) }).click()
   await page.keyboard.type(second)
   await page.keyboard.press('Enter')
-  await page.getByRole('dialog', { name: 'Open Project' }).getByRole('button', { name: 'Attach' }).click()
+  await page.getByRole('dialog', { name: 'Open Project' }).getByRole('button', { name: 'New Tab' }).click()
   await expect(page.locator('.main-toolbar')).toContainText(name(second))
 
   await page.keyboard.press('Meta+Shift+KeyA')
@@ -121,7 +157,7 @@ test('New Window opens the project in its own window, with its own Claude Code l
   await page.keyboard.type(second)
   await page.keyboard.press('Enter')
   const opened = app.waitForEvent('window')
-  await page.keyboard.press('Enter') // New Window is the default button
+  await page.getByRole('dialog', { name: 'Open Project' }).getByRole('button', { name: 'New Window' }).click()
   const other = await opened
   await other.waitForSelector('.workbench')
   await expect(other.locator('.main-toolbar')).toContainText(name(second))

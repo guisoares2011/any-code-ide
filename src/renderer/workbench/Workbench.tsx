@@ -8,6 +8,7 @@ import { useStore } from '../state/store'
 import { setPanelSize, workbench } from '../state/workbench'
 import { OpenProjectDialog } from './OpenProjectDialog'
 import { MainToolbar } from './MainToolbar'
+import { ProjectTabs } from './ProjectTabs'
 import { Splitter } from './Splitter'
 import { StatusBar } from './StatusBar'
 import { Stripe } from './Stripe'
@@ -25,6 +26,7 @@ export function Workbench() {
   return (
     <div className="workbench">
       <MainToolbar />
+      <ProjectTabs />
       <div className="workbench-body">
         <Stripe side="left" />
         <div className="side-panel" style={{ width: sizes.left, display: visible.left ? undefined : 'none' }}>

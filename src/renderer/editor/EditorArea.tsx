@@ -4,7 +4,7 @@ import { DiffHost } from '../bridge/DiffHost'
 import { rejectDiffByKey } from '../bridge/diffs'
 import { trackSelection } from '../bridge/selection'
 import { useActions, shortcutFor } from '../keymap/service'
-import { closeTab, showTabProject, workbench, type EditorTab } from '../state/workbench'
+import { closeTab, workbench, type EditorTab } from '../state/workbench'
 import { gitState } from '../state/git'
 import { useStore } from '../state/store'
 import { VcsDiffHost } from '../vcs/VcsDiffHost'
@@ -47,11 +47,7 @@ export function EditorArea() {
               title={tab.kind === 'diff' ? 'Change proposed by Claude' : (tab.filePath ?? tab.path)}
               onMouseDown={(event) => {
                 if (event.button === 1) closeEditorTab(tab)
-                else {
-                  workbench.set({ activeTab: tab.path })
-                  // Also when the tab was already active: its project becomes the current one.
-                  showTabProject(tab.path)
-                }
+                else workbench.set({ activeTab: tab.path })
               }}
             >
               <Icon name={tab.kind === 'file' ? fileIconName(tab.name) : 'vcs/diff'} />

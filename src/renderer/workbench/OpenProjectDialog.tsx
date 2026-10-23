@@ -4,7 +4,7 @@ import { shortcutFor, useActions } from '../keymap/service'
 import { createStore, useStore } from '../state/store'
 import { workbench } from '../state/workbench'
 
-export type OpenTarget = 'this' | 'new' | 'attach'
+export type OpenTarget = 'this' | 'new' | 'tab'
 
 interface Pending {
   path: string
@@ -14,8 +14,8 @@ interface Pending {
 const request = createStore<{ pending: Pending | null }>({ pending: null })
 
 /**
- * The "Open Project" question of IntelliJ/WebStorm: This Window replaces the current project, New
- * Window opens another window and Attach adds the project to this window's project switcher.
+ * The "Open Project" question of IntelliJ: New Tab adds a project tab to this window (like merged
+ * project windows on macOS), New Window opens another window and This Window replaces the project.
  */
 export function askOpenTarget(path: string): Promise<OpenTarget | null> {
   request.get().pending?.resolve(null)
@@ -40,7 +40,7 @@ export function OpenProjectDialog() {
   useActions(
     () => [
       { id: 'Popup.Cancel', isEnabled: (c) => c.focusArea === 'dialog' && request.get().pending !== null, perform: () => answer(null) },
-      { id: 'Popup.Confirm', isEnabled: (c) => c.focusArea === 'dialog' && request.get().pending !== null, perform: () => answer('new') },
+      { id: 'Popup.Confirm', isEnabled: (c) => c.focusArea === 'dialog' && request.get().pending !== null, perform: () => answer('tab') },
     ],
     [],
   )
@@ -56,8 +56,8 @@ export function OpenProjectDialog() {
             Where would you like to open <b>{basename(pending.path)}</b>?
           </p>
           <p className="hint">
-            This Window closes <b>{current?.name}</b>. Attach keeps both in this window, switched from the project widget
-            {switcher ? ` or with ${switcher}` : ''}.
+            New Tab keeps <b>{current?.name}</b> open in another tab of this window{switcher ? ` (switch with ${switcher})` : ''}. This
+            Window closes it.
           </p>
         </div>
         <div className="dialog-footer">
@@ -65,14 +65,14 @@ export function OpenProjectDialog() {
           <button className="button secondary" onClick={() => answer(null)}>
             Cancel
           </button>
-          <button className="button secondary" onClick={() => answer('attach')}>
-            Attach
-          </button>
           <button className="button secondary" onClick={() => answer('this')}>
             This Window
           </button>
-          <button ref={confirmButton} className="button primary" onClick={() => answer('new')}>
+          <button className="button secondary" onClick={() => answer('new')}>
             New Window
+          </button>
+          <button ref={confirmButton} className="button primary" onClick={() => answer('tab')}>
+            New Tab
           </button>
         </div>
       </div>

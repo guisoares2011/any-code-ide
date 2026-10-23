@@ -21,7 +21,7 @@ Quem trabalha com front-end e back-end acaba alternando entre WebStorm e Intelli
 
 O AnyCode cobre exatamente isso:
 
-- **Todos os projetos, como no IntelliJ.** Abra cada projeto na própria janela (New Window) ou junte vários numa janela só (Attach). Cada um tem abas, tool windows, terminais, execuções, servidores de linguagem e a própria sessão do `claude`. Troque entre eles com ⌥⌘\` ou pelo widget de projeto.
+- **Todos os projetos, como no IntelliJ.** Abra cada projeto numa aba (New Tab) ou na própria janela (New Window), e junte janelas em abas com Merge All Project Windows. Cada um tem abas, tool windows, terminais, execuções, servidores de linguagem e a própria sessão do `claude`. Troque entre eles com ⌥⌘\` ou pelo widget de projeto.
 - **Claude Code como cidadão de primeira classe.** O terminal do agente abre por projeto e a sessão continua viva quando você troca de projeto. A IDE se conecta ao `claude` pelo mesmo mecanismo do `/ide` das extensões oficiais: diffs para aceitar ou rejeitar, seleção atual, arquivos abertos e diagnostics.
 - **Memória muscular do IntelliJ.** O keymap padrão do IntelliJ para macOS é carregado direto dos XMLs originais, com os mesmos action IDs. ⇧⇧, ⌘B, ⌘E, ⌘K, ⌃R e ⌥F12 fazem o que você espera.
 - **Visual Islands Dark.** Cores, ícones e layout do IntelliJ New UI, com JetBrains Mono no editor e Inter na interface.

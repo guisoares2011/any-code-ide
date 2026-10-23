@@ -69,7 +69,8 @@ export interface PtyExit {
 export interface InvokeChannels {
   'app:info': { args: []; result: AppInfo }
   /** Projects to show at startup and which one is current. */
-  'project:initial': { args: []; result: { projects: ProjectInfo[]; current: string | null } }
+  /** `resume`: projects moved here from another window, whose agent resumes its conversation. */
+  'project:initial': { args: []; result: { projects: ProjectInfo[]; current: string | null; resume: string[] } }
   /** Opens a directory as a project (adds it to the allowed roots); null when it is not a directory. */
   'project:open': { args: [path: string]; result: ProjectInfo | null }
   'project:close': { args: [root: string]; result: void }
@@ -79,6 +80,10 @@ export interface InvokeChannels {
   'project:openWindow': { args: [path: string]; result: boolean }
   /** Projects open in the other windows, for the Projects popup. */
   'project:otherWindows': { args: []; result: ProjectInfo[] }
+  /** MergeAllWindowsAction: the projects of every other window become tabs of this one; returns them. */
+  'window:mergeAll': { args: []; result: ProjectInfo[] }
+  /** Move Tab to New Window: the project leaves this window for a new one. */
+  'project:moveToNewWindow': { args: [root: string]; result: boolean }
   'project:recent': { args: []; result: RecentProject[] }
   /** Native folder picker; null when cancelled or in headless mode. */
   'project:pickFolder': { args: []; result: string | null }
@@ -180,6 +185,8 @@ export const INVOKE_CHANNELS = [
   'project:focusIfOpen',
   'project:openWindow',
   'project:otherWindows',
+  'window:mergeAll',
+  'project:moveToNewWindow',
   'project:recent',
   'project:pickFolder',
   'fs:readDir',

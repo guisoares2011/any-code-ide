@@ -36,14 +36,28 @@ export async function runInNewTerminal(command: string, cwd: string): Promise<vo
 /** Projects whose agent tab was started; each project gets one, once. */
 const agentStarted = new Set<string>()
 
+/** Projects that came from another window: their `claude` picks up the conversation it had there. */
+const resumeRequested = new Set<string>()
+
+export function resumeAgent(root: string): void {
+  resumeRequested.add(root)
+}
+
+const quote = (word: string): string => (/^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`)
+
 /** The agent tab: `claude` (or ANYCODE_AGENT_COMMAND) in the project root. */
 async function startAgent(root: string): Promise<void> {
   if (agentStarted.has(root)) return
   agentStarted.add(root)
   const group = terminalGroupFor(root)
   const { agentCommand } = await window.anycode.invoke('app:info')
-  if (agentCommand) {
-    const title = agentCommand[0] === 'claude' ? 'Claude' : agentCommand.join(' ')
+  const isClaude = agentCommand?.[0]?.split('/').pop() === 'claude'
+  if (agentCommand && isClaude && resumeRequested.delete(root)) {
+    // claude --continue resumes the folder's latest conversation; without one it starts afresh.
+    const line = agentCommand.map(quote).join(' ')
+    await group.create({ title: 'Claude', cwd: root, script: `${line} --continue || exec ${line}` })
+  } else if (agentCommand) {
+    const title = isClaude ? 'Claude' : agentCommand.join(' ')
     await group.create({ title, cwd: root, command: agentCommand })
   } else await group.create({ title: shellTitle(group), cwd: root })
 }
@@ -58,15 +72,8 @@ export function TerminalTabs() {
   const group = useTerminalGroup()
   const { list, active } = useStore(group.store, (s) => s)
   const project = useStore(workbench, (s) => s.project)
-  const attached = useStore(workbench, (s) => s.projects.length > 1)
   return (
     <div className="tool-window-tabs">
-      {/* With attached projects, the sessions shown are the current project's. */}
-      {attached && project && (
-        <span className="tool-window-project" title={project.root}>
-          {project.name}
-        </span>
-      )}
       {list.map((session) => (
         <div
           key={session.id}

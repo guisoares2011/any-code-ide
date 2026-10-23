@@ -2,7 +2,7 @@ import { closeEditorTab } from '../editor/EditorArea'
 import { saveAll } from '../editor/documents'
 import type { ActionDefinition } from '../keymap/actions'
 import { gitState, pushCurrentBranch } from '../state/git'
-import { closeCurrentProject, pickAndOpenProject } from '../state/projects'
+import { closeCurrentProject, mergeAllProjectWindows, moveProjectTabToNewWindow, pickAndOpenProject } from '../state/projects'
 import {
   activateToolWindow,
   cycleProject,
@@ -52,6 +52,14 @@ export function workbenchActions(): ActionDefinition[] {
     { id: 'Vcs.Push', perform: () => void pushCurrentBranch() },
     // The branch widget's popup (git4idea's Git.Branches; no default shortcut on macOS).
     { id: 'Git.Branches', text: 'Branches…', isEnabled: () => gitState.get().status.repository, perform: () => openPopup('Branches') },
+    // Window menu of IntelliJ on macOS: project windows merged into tabs, and back.
+    { id: 'MergeAllWindowsAction', perform: () => void mergeAllProjectWindows() },
+    {
+      id: 'AnyCode.MoveTabToNewWindow',
+      text: 'Move Tab to New Window',
+      isEnabled: () => workbench.get().projects.length > 1,
+      perform: () => void moveProjectTabToNewWindow(),
+    },
     { id: 'NextProjectWindow', perform: () => cycleProject(1) },
     { id: 'PreviousProjectWindow', perform: () => cycleProject(-1) },
     { id: '$LRU', text: 'Recent Projects', perform: () => openPopup('Projects') },

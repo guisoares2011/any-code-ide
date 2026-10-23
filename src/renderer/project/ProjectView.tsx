@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry, ProjectInfo } from '@shared/ipc'
 import { useActions } from '../keymap/service'
-import { openFile, workbench } from '../state/workbench'
+import { openFile, switchProject, workbench } from '../state/workbench'
 import { gitState } from '../state/git'
 import { useStore } from '../state/store'
 import { Icon } from '../ui/Icon'
@@ -17,52 +17,59 @@ interface Row {
 }
 
 export function ProjectView() {
-  const project = useStore(workbench, (s) => s.project)
-  if (!project) return <div className="empty-state">No project open</div>
-  return <ProjectTree key={project.root} project={project} />
+  const projects = useStore(workbench, (s) => s.projects)
+  if (projects.length === 0) return <div className="empty-state">No project open</div>
+  return <ProjectTree projects={projects} />
 }
 
-function ProjectTree({ project }: { project: ProjectInfo }) {
+/** Every project of the window as a root, as IntelliJ shows attached projects. */
+function ProjectTree({ projects }: { projects: readonly ProjectInfo[] }) {
   const focus = useStore(workbench, (s) => s.focus)
+  const current = useStore(workbench, (s) => s.project?.root)
   const vcs = useStore(gitState, (s) => s.byPath)
   const [children, setChildren] = useState(new Map<string, DirEntry[]>())
-  const [expanded, setExpanded] = useState(() => new Set<string>([project.root]))
-  const [selected, setSelected] = useState<string | null>(project.root)
-  const [decorations, setDecorations] = useState(new Map<string, DirDecoration>())
+  const [expanded, setExpanded] = useState(() => new Set<string>())
+  const [selected, setSelected] = useState<string | null>(current ?? null)
+  const [decorationsByRoot, setDecorationsByRoot] = useState(new Map<string, Map<string, DirDecoration>>())
   const treeRef = useRef<HTMLDivElement>(null)
-
-  // Maven modules and source roots, like IntelliJ after importing the reactor; reread when a pom changes.
-  useEffect(() => {
-    let cancelled = false
-    const read = (): void => {
-      void window.anycode.invoke('maven:modules', project.root).then((modules) => {
-        if (!cancelled) setDecorations(mavenDecorations(project.root, modules))
-      })
-    }
-    read()
-    const off = window.anycode.on('fs:changed', (paths) => {
-      if (paths.some((p) => p.endsWith('/pom.xml') && p.startsWith(`${project.root}/`))) read()
-    })
-    return () => {
-      cancelled = true
-      off()
-    }
-  }, [project.root])
+  const roots = useMemo(() => projects.map((p) => p.root), [projects])
 
   const load = useCallback(async (dir: string) => {
     const entries = await window.anycode.invoke('fs:readDir', dir)
     setChildren((prev) => new Map(prev).set(dir, sortEntries(entries)))
   }, [])
 
+  // A project joining the window shows up expanded, so attaching visibly adds it.
+  const seen = useRef(new Set<string>())
+  useEffect(() => {
+    for (const root of seen.current) if (!roots.includes(root)) seen.current.delete(root)
+    const added = roots.filter((root) => !seen.current.has(root))
+    if (added.length === 0) return
+    for (const root of added) {
+      seen.current.add(root)
+      void load(root)
+    }
+    setExpanded((prev) => new Set([...prev, ...added]))
+  }, [roots, load])
+
+  // Maven modules and source roots, like IntelliJ after importing the reactor; reread when a pom changes.
   useEffect(() => {
     let cancelled = false
-    void window.anycode.invoke('fs:readDir', project.root).then((entries) => {
-      if (!cancelled) setChildren((prev) => new Map(prev).set(project.root, sortEntries(entries)))
+    const read = (root: string): void => {
+      void window.anycode.invoke('maven:modules', root).then((modules) => {
+        if (!cancelled) setDecorationsByRoot((prev) => new Map(prev).set(root, mavenDecorations(root, modules)))
+      })
+    }
+    for (const root of roots) read(root)
+    const off = window.anycode.on('fs:changed', (paths) => {
+      for (const root of roots) if (paths.some((p) => p.endsWith('/pom.xml') && p.startsWith(`${root}/`))) read(root)
     })
     return () => {
       cancelled = true
+      off()
     }
-  }, [project.root])
+  }, [roots])
+  const decorations = useMemo(() => new Map([...decorationsByRoot.values()].flatMap((m) => [...m])), [decorationsByRoot])
 
   useEffect(() => {
     if (focus.target === 'Project') treeRef.current?.focus()
@@ -75,9 +82,9 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
       result.push({ entry, depth, expanded: isOpen })
       if (isOpen) for (const child of children.get(entry.path) ?? []) visit(child, depth + 1)
     }
-    visit({ name: project.name, path: project.root, kind: 'directory' }, 0)
+    for (const project of projects) visit({ name: project.name, path: project.root, kind: 'directory' }, 0)
     return result
-  }, [project, expanded, children])
+  }, [projects, expanded, children])
 
   const toggle = useCallback(
     (path: string, open?: boolean) => {
@@ -212,12 +219,18 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
         <div
           key={row.entry.path}
           data-path={row.entry.path}
+          data-icon={icon}
           role="treeitem"
           aria-expanded={row.entry.kind === 'directory' ? row.expanded : undefined}
           aria-selected={row.entry.path === selected}
+          aria-current={row.depth === 0 && row.entry.path === current ? 'true' : undefined}
           className={`tree-row${row.entry.path === selected ? ' selected' : ''}`}
           style={{ paddingLeft: 4 + row.depth * 18 }}
-          onMouseDown={() => setSelected(row.entry.path)}
+          onMouseDown={() => {
+            setSelected(row.entry.path)
+            // A project's root row makes it the current project (toolbar, terminal, git).
+            if (row.depth === 0) switchProject(row.entry.path, false)
+          }}
           onClick={() => {
             if (row.entry.kind === 'directory') toggle(row.entry.path)
           }}
@@ -233,7 +246,7 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
           <Icon name={icon} />
           <span className={nameClass || undefined}>{row.entry.name}</span>
           {decoration?.moduleName && <span className="module-name">[{decoration.moduleName}]</span>}
-          {row.depth === 0 && <span className="hint">{project.root}</span>}
+          {row.depth === 0 && <span className="hint">{row.entry.path}</span>}
         </div>
         )
       })}

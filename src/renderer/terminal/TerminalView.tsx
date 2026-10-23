@@ -58,8 +58,15 @@ export function TerminalTabs() {
   const group = useTerminalGroup()
   const { list, active } = useStore(group.store, (s) => s)
   const project = useStore(workbench, (s) => s.project)
+  const attached = useStore(workbench, (s) => s.projects.length > 1)
   return (
     <div className="tool-window-tabs">
+      {/* With attached projects, the sessions shown are the current project's. */}
+      {attached && project && (
+        <span className="tool-window-project" title={project.root}>
+          {project.name}
+        </span>
+      )}
       {list.map((session) => (
         <div
           key={session.id}

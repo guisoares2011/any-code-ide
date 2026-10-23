@@ -6,6 +6,7 @@ import { SettingsDialog } from '../settings/SettingsDialog'
 import { VcsActions } from '../vcs/VcsActions'
 import { useStore } from '../state/store'
 import { setPanelSize, workbench } from '../state/workbench'
+import { OpenProjectDialog } from './OpenProjectDialog'
 import { MainToolbar } from './MainToolbar'
 import { Splitter } from './Splitter'
 import { StatusBar } from './StatusBar'
@@ -74,6 +75,7 @@ export function Workbench() {
       <PopupHost />
       <RunConfigurationsDialog />
       <VcsActions />
+      <OpenProjectDialog />
       <SettingsDialog />
     </div>
   )

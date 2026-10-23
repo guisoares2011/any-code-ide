@@ -28,6 +28,13 @@ describe('LspRouter', () => {
     expect(server[0]?.params).toMatchObject({ rootUri: 'file:///p/app', workspaceFolders: [{ uri: 'file:///p/app', name: 'app' }] })
   })
 
+  it('keeps jdtls from writing Eclipse metadata into the project', () => {
+    const server: JsonRpcMessage[] = []
+    const router = new LspRouter({ spec: LANGUAGE_SERVERS.find((s) => s.id === 'java')!, root: '/p/app', toServer: (m) => server.push(m), toClient: () => {} })
+    router.fromClient({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null, capabilities: {} } })
+    expect(server[0]?.params).toMatchObject({ initializationOptions: { settings: { java: { import: { generatesMetadataFilesAtProjectRoot: false } } } } })
+  })
+
   it('forwards only owned file documents and fixes the languageId', () => {
     const { router, server } = setup()
     router.fromClient(open('file:///p/app/a.tsx'))

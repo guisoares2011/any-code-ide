@@ -73,6 +73,12 @@ export interface InvokeChannels {
   /** Opens a directory as a project (adds it to the allowed roots); null when it is not a directory. */
   'project:open': { args: [path: string]; result: ProjectInfo | null }
   'project:close': { args: [root: string]; result: void }
+  /** Brings the window that has the project open to the front; false when no other window has it. */
+  'project:focusIfOpen': { args: [path: string]; result: boolean }
+  /** Opens a directory as a project in a new window; false when it is not a directory. */
+  'project:openWindow': { args: [path: string]; result: boolean }
+  /** Projects open in the other windows, for the Projects popup. */
+  'project:otherWindows': { args: []; result: ProjectInfo[] }
   'project:recent': { args: []; result: RecentProject[] }
   /** Native folder picker; null when cancelled or in headless mode. */
   'project:pickFolder': { args: []; result: string | null }
@@ -141,6 +147,8 @@ export interface SendChannels {
   'app:rendererReady': []
   /** The project shown in the window changed (remembered for the next start). */
   'project:activated': [root: string]
+  /** NextProjectWindow / PreviousProjectWindow across windows. */
+  'window:cycle': [delta: 1 | -1]
   /** Forwarded to Claude Code as the selection_changed notification. */
   'bridge:selectionChanged': [selection: EditorSelection]
   /** Forwarded to Claude Code as the at_mentioned notification. */
@@ -158,6 +166,8 @@ export interface EventChannels {
   'bridge:status': [status: BridgeStatus]
   /** Files or directories changed on disk under an opened project (absolute paths). */
   'fs:changed': [paths: string[]]
+  /** Show this already open project (another window asked to open it). */
+  'project:reveal': [root: string]
   'lsp:message': [sessionId: string, message: unknown]
   'lsp:exit': [sessionId: string, code: number | null]
 }
@@ -167,6 +177,9 @@ export const INVOKE_CHANNELS = [
   'project:initial',
   'project:open',
   'project:close',
+  'project:focusIfOpen',
+  'project:openWindow',
+  'project:otherWindows',
   'project:recent',
   'project:pickFolder',
   'fs:readDir',
@@ -208,9 +221,9 @@ export const INVOKE_CHANNELS = [
   'settings:set',
 ] as const satisfies readonly (keyof InvokeChannels)[]
 
-export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send'] as const satisfies readonly (keyof SendChannels)[]
+export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'window:cycle', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send'] as const satisfies readonly (keyof SendChannels)[]
 
-export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'lsp:message', 'lsp:exit'] as const satisfies readonly (keyof EventChannels)[]
+export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'project:reveal', 'lsp:message', 'lsp:exit'] as const satisfies readonly (keyof EventChannels)[]
 
 export type InvokeChannel = keyof InvokeChannels
 export type InvokeArgs<C extends InvokeChannel> = InvokeChannels[C]['args']

@@ -108,21 +108,41 @@ export class RecentProjectsStore {
 }
 
 /** Projects open when the app last ran, reopened on the next start. */
+/** The projects of one window: in switcher order, plus the one shown. */
+export interface SavedWindow {
+  roots: string[]
+  current: string | null
+}
+
+const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((r): r is string => typeof r === 'string') : [])
+
+/** Window list of open-projects.json; the single-window format ({ roots, current }) reads as one window. */
+export function parseOpenProjects(json: unknown): SavedWindow[] {
+  const saved = (json ?? {}) as { windows?: unknown; roots?: unknown; current?: unknown }
+  const entries = Array.isArray(saved.windows) ? (saved.windows as { roots?: unknown; current?: unknown }[]) : [saved]
+  return entries
+    .map((w) => {
+      const roots = strings(w?.roots)
+      const current = typeof w?.current === 'string' && roots.includes(w.current) ? w.current : (roots[0] ?? null)
+      return { roots, current }
+    })
+    .filter((w) => w.roots.length > 0)
+}
+
+/** The previous session's windows, reopened at startup. */
 export class OpenProjectsStore {
   constructor(private readonly file: string) {}
 
-  async read(): Promise<{ roots: string[]; current: string | null }> {
+  async read(): Promise<SavedWindow[]> {
     try {
-      const saved = JSON.parse(await readFile(this.file, 'utf8')) as { roots?: unknown; current?: unknown }
-      const roots = Array.isArray(saved.roots) ? saved.roots.filter((r): r is string => typeof r === 'string') : []
-      return { roots, current: typeof saved.current === 'string' ? saved.current : null }
+      return parseOpenProjects(JSON.parse(await readFile(this.file, 'utf8')))
     } catch {
-      return { roots: [], current: null }
+      return []
     }
   }
 
-  async write(roots: string[], current: string | null): Promise<void> {
+  async write(windows: readonly SavedWindow[]): Promise<void> {
     await mkdir(dirname(this.file), { recursive: true })
-    await writeFile(this.file, JSON.stringify({ roots, current: current ?? roots[0] ?? null }, null, 2))
+    await writeFile(this.file, JSON.stringify({ windows: windows.filter((w) => w.roots.length > 0) }, null, 2))
   }
 }

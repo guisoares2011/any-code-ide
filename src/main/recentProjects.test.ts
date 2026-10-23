@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeRecent, parseJetBrainsRecent, productName } from './recentProjects'
+import { mergeRecent, parseJetBrainsRecent, parseOpenProjects, productName } from './recentProjects'
 
 const XML = `<application>
   <component name="RecentProjectsManager">
@@ -48,5 +48,17 @@ describe('recent projects', () => {
       ],
     )
     expect(merged.map((p) => `${p.path}:${p.source}`)).toEqual(['/a:AnyCode', '/b:IntelliJ IDEA'])
+  })
+})
+
+describe('open projects of the previous session', () => {
+  it('reads one entry per window and the older single-window format', () => {
+    expect(parseOpenProjects({ windows: [{ roots: ['/a', '/b'], current: '/b' }, { roots: ['/c'], current: null }, { roots: [] }] })).toEqual([
+      { roots: ['/a', '/b'], current: '/b' },
+      { roots: ['/c'], current: '/c' },
+    ])
+    expect(parseOpenProjects({ roots: ['/a', '/b'], current: '/b' })).toEqual([{ roots: ['/a', '/b'], current: '/b' }])
+    expect(parseOpenProjects({ roots: ['/a'], current: '/gone' })).toEqual([{ roots: ['/a'], current: '/a' }])
+    expect(parseOpenProjects(null)).toEqual([])
   })
 })

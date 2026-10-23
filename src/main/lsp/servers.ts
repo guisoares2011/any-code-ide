@@ -91,6 +91,9 @@ function jdtls(context: ServerContext): ServerCommand {
       `-Dosgi.sharedConfiguration.area=${join(home, config)}`,
       '-Dosgi.sharedConfiguration.area.readOnly=true',
       '-Dosgi.configuration.cascaded=true',
+      // Eclipse metadata (.project, .classpath, .settings) in the -data directory, not in the user's
+      // modules; read at import time, so the initialize setting alone is not enough (vscode-java does the same).
+      '-Djava.import.generatesMetadataFilesAtProjectRoot=false',
       '-Xms256m',
       '-Xmx2G',
       '--add-modules=ALL-SYSTEM',

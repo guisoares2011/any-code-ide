@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn, type IPty } from '@lydell/node-pty'
 import type { WebContents } from 'electron'
 import type { PtyCreateOptions } from '@shared/ipc'
-import { emit, handle } from './ipc'
+import { emit, handle, handleFrom } from './ipc'
 import { assertInsideProject } from './project'
 import { userShell } from './settings'
 
@@ -103,19 +103,18 @@ export function createPty(owner: WebContents, options: PtyCreateOptions, extraEn
   return id
 }
 
-export function killAllPtys(): void {
+/** Kills every terminal, or only those of one window. */
+export function killAllPtys(owner?: WebContents): void {
   for (const [id, session] of sessions) {
+    if (owner && session.owner !== owner) continue
     session.pty.kill()
     sessions.delete(id)
   }
 }
 
-export function registerPtyHandlers(getOwner: () => WebContents | null, envFor: () => Record<string, string>): void {
-  handle('pty:create', (options) => {
-    const owner = getOwner()
-    if (!owner) throw new Error('No window to attach the terminal to')
-    return createPty(owner, options, envFor())
-  })
+/** `envFor` gives the variables of the asking window (its IDE bridge). */
+export function registerPtyHandlers(envFor: (owner: WebContents) => Record<string, string>): void {
+  handleFrom('pty:create', (owner, options) => createPty(owner, options, envFor(owner)))
   handle('pty:write', (id, data) => {
     sessions.get(id)?.pty.write(data)
   })

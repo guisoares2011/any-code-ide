@@ -152,3 +152,24 @@ test('Show History filters the log by the current file', async () => {
   await page.getByRole('button', { name: 'Clear path filter' }).click()
   await expect(commits.getByRole('treeitem')).toHaveCount(2)
 })
+
+test('the branch widget lists branches, checks one out and creates a new one', async () => {
+  const { page } = fixture
+  git('branch', 'feature/login')
+  const toolbar = page.locator('.main-toolbar')
+  await toolbar.getByRole('button', { name: 'main' }).click()
+  const popup = page.getByRole('dialog', { name: 'Git Branches' })
+  await expect(popup).toContainText('Local')
+  await expect(popup.locator('.popup-item', { hasText: 'main' })).toContainText('current')
+  await page.keyboard.type('login')
+  await expect(popup.locator('.popup-item')).toHaveCount(2) // the branch and "Create new branch 'login'"
+  await popup.locator('.popup-item', { hasText: 'feature/login' }).click()
+  await expect.poll(() => git('branch', '--show-current')).toBe('feature/login')
+  await expect(toolbar).toContainText('feature/login')
+
+  await toolbar.getByRole('button', { name: 'feature/login' }).click()
+  await page.keyboard.type('topic/new')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => git('branch', '--show-current')).toBe('topic/new')
+  await expect(toolbar).toContainText('topic/new')
+})

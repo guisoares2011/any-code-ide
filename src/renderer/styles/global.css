@@ -313,6 +313,12 @@ button {
   white-space: nowrap;
 }
 
+.tool-window-project {
+  color: var(--c-text-muted);
+  padding: 0 6px 0 2px;
+  white-space: nowrap;
+}
+
 .tool-window-tab:hover {
   background: var(--c-tab-bg-hovered);
 }
@@ -1232,6 +1238,23 @@ button {
 }
 
 /* ── Rollback ───────────────────────────────────────────────────────────── */
+
+.open-project-dialog {
+  width: min(480px, 92vw);
+}
+
+.open-project-dialog .dialog-body {
+  padding: 0 16px 12px;
+  line-height: 1.5;
+}
+
+.open-project-dialog .dialog-body p {
+  margin: 0 0 8px;
+}
+
+.open-project-dialog .dialog-body .hint {
+  color: var(--c-text-muted);
+}
 
 .rollback-dialog {
   width: min(560px, 92vw);

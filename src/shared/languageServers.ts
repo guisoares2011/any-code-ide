@@ -9,6 +9,8 @@ export interface LanguageServerSpec {
   monacoLanguages: readonly string[]
   /** LSP languageId to send for a file extension (the server picks the script kind from it). */
   languageIdByExtension: Readonly<Record<string, string>>
+  /** Sent as `initializationOptions` in the initialize request. */
+  initializationOptions?: unknown
 }
 
 export const LANGUAGE_SERVERS: readonly LanguageServerSpec[] = [
@@ -32,6 +34,9 @@ export const LANGUAGE_SERVERS: readonly LanguageServerSpec[] = [
     name: 'Java (Eclipse JDT LS)',
     monacoLanguages: ['java'],
     languageIdByExtension: { '.java': 'java' },
+    // Like vscode-java: Eclipse metadata (.project, .classpath, .settings) goes to the jdtls data
+    // directory instead of every module of the user's repository.
+    initializationOptions: { settings: { java: { import: { generatesMetadataFilesAtProjectRoot: false } } } },
   },
   {
     id: 'kotlin',

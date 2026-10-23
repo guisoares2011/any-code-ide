@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { basename, dirname, relativePath } from '@shared/paths'
 import { actionLabel, actions, performAction, shortcutFor, useActions, useActionRegistryVersion } from '../keymap/service'
 import type { GitBranchList } from '@shared/git'
-import type { RecentProject } from '@shared/ipc'
+import type { ProjectInfo, RecentProject } from '@shared/ipc'
 import { RUN_CONFIGURATION_TYPES, type RunConfigurationSpec } from '@shared/runConfigurations'
 import { openRunConfigurationsEditor, runConfiguration, runState } from '../run/runState'
 import { checkoutBranch } from '../state/git'
@@ -39,12 +39,26 @@ const ORIGIN_TITLES: Record<RunConfigurationSpec['origin'], string> = {
   intellij: 'IntelliJ',
 }
 
-let fileCache: { root: string; files: string[] } | null = null
+const fileCache = new Map<string, string[]>()
 
+/** Files of a project relative to its root; a cached list answers at once and is refreshed behind. */
 async function projectFiles(root: string): Promise<string[]> {
-  if (fileCache?.root !== root) fileCache = { root, files: await window.anycode.invoke('fs:listFiles', root) }
-  else void window.anycode.invoke('fs:listFiles', root).then((files) => (fileCache = { root, files }))
-  return fileCache.files
+  const refresh = window.anycode.invoke('fs:listFiles', root).then((files) => {
+    fileCache.set(root, files)
+    return files
+  })
+  return fileCache.get(root) ?? refresh
+}
+
+/** A file as Go to File matches and shows it: relative to its project, prefixed by the project's name when the window has several. */
+interface SearchFile {
+  path: string
+  display: string
+}
+
+async function windowFiles(projects: readonly ProjectInfo[]): Promise<SearchFile[]> {
+  const lists = await Promise.all(projects.map((p) => projectFiles(p.root)))
+  return projects.flatMap((p, i) => lists[i]!.map((f) => ({ path: `${p.root}/${f}`, display: projects.length > 1 ? `${p.name}/${f}` : f })))
 }
 
 const TITLES: Record<PopupKind, string> = {
@@ -82,30 +96,41 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
   const runConfigurations = useStore(runState, (s) => s.configurations)
   const openProjects = useStore(workbench, (s) => s.projects)
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
+  const [otherWindows, setOtherWindows] = useState<ProjectInfo[]>([])
   const [branches, setBranches] = useState<GitBranchList>({ current: null, local: [], remote: [] })
 
   useEffect(() => {
-    if (kind === 'Projects') void window.anycode.invoke('project:recent').then(setRecentProjects)
+    if (kind === 'Projects') {
+      void window.anycode.invoke('project:recent').then(setRecentProjects)
+      void window.anycode.invoke('project:otherWindows').then(setOtherWindows)
+    }
     if (kind === 'Branches' && project) void window.anycode.invoke('git:branchList', project.root).then(setBranches)
   }, [kind, project])
   const registryVersion = useActionRegistryVersion()
   const [query, setQuery] = useState('')
-  const [files, setFiles] = useState<string[]>([])
+  const [files, setFiles] = useState<SearchFile[]>([])
   const [tab, setTab] = useState<Tab>(initialTab(kind))
   const [selected, setSelected] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (project && (kind === 'GotoFile' || kind === 'SearchEverywhere')) void projectFiles(project.root).then(setFiles)
-  }, [project, kind])
+    if (kind === 'GotoFile' || kind === 'SearchEverywhere') void windowFiles(openProjects).then(setFiles)
+  }, [openProjects, kind])
 
   const items = useMemo(() => {
-    const root = project?.root ?? '/'
+    // The folder of a file, relative to its project (named when the window has several).
+    const hintFor = (path: string): string => {
+      const owner = openProjects.filter((p) => path.startsWith(`${p.root}/`)).sort((a, b) => b.root.length - a.root.length)[0]
+      if (!owner) return dirname(relativePath(project?.root ?? '/', path))
+      const folder = dirname(relativePath(owner.root, path))
+      // dirname of a relative path keeps a leading "/" ("/src", or "/" at the project root).
+      return openProjects.length > 1 ? (folder === '/' ? owner.name : `${owner.name}${folder}`) : folder
+    }
     const fileItem = (path: string, group: Item['group'], positions: number[], labelOffset: number): Item => ({
       key: `${group}:${path}`,
       group,
       label: basename(path),
-      hint: dirname(relativePath(root, path)),
+      hint: hintFor(path),
       icon: fileIconName(basename(path)),
       positions,
       labelOffset,
@@ -125,7 +150,20 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
           run: () => switchProject(item.root),
         })
       }
-      const others = recentProjects.filter((r) => !openProjects.some((p) => p.root === r.path))
+      // Projects of the other windows: choosing one brings its window to the front.
+      for (const { item, match } of rank(query, otherWindows, (p) => p.name)) {
+        result.push({
+          key: `window:${item.root}`,
+          group: 'Open Projects',
+          label: item.name,
+          hint: `${item.root} · other window`,
+          icon: 'nodes/ideaProject',
+          positions: match.positions,
+          labelOffset: 0,
+          run: () => void openProjectPath(item.root),
+        })
+      }
+      const others = recentProjects.filter((r) => !openProjects.some((p) => p.root === r.path) && !otherWindows.some((p) => p.root === r.path))
       for (const { item, match } of rank(query, others, (p) => p.name, 30)) {
         result.push({
           key: `recent:${item.path}`,
@@ -254,8 +292,8 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
       if (query === '' && kind === 'SearchEverywhere') {
         for (const path of recentFiles.slice(0, 10)) result.push(fileItem(path, 'Recent Files', [], 0))
       } else if (query !== '') {
-        for (const { item, match } of rank(query, files, (f) => f, 100)) {
-          result.push(fileItem(`${root}/${item}`, 'Files', match.positions, item.lastIndexOf('/') + 1))
+        for (const { item, match } of rank(query, files, (f) => f.display, 100)) {
+          result.push(fileItem(item.path, 'Files', match.positions, item.display.lastIndexOf('/') + 1))
         }
       }
     }
@@ -275,7 +313,7 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
     }
     return result
     // registryVersion: re-rank when actions change
-  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, recentProjects, branches, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, otherWindows, recentProjects, branches, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     listRef.current?.querySelector('.popup-item.selected')?.scrollIntoView({ block: 'nearest' })

@@ -65,7 +65,7 @@ export interface Caret {
 export interface WorkbenchState {
   /** The project shown in the window. */
   project: ProjectInfo | null
-  /** Every open project, in opening order; each keeps its own tabs, tool windows and terminals. */
+  /** The projects of this window (attached), in opening order; each has its own terminals and runs. */
   projects: ProjectInfo[]
   visible: Record<Anchor, ToolWindowId | null>
   /** Panel sizes in px: width for left/right, height for bottom. */
@@ -96,31 +96,32 @@ export const workbench = createStore<WorkbenchState>({
   caret: null,
 })
 
-/** The part of the state that belongs to one project and is swapped when switching. */
-type ProjectView = Pick<WorkbenchState, 'tabs' | 'activeTab' | 'recentFiles' | 'visible' | 'caret'>
-
-const DEFAULT_VIEW: ProjectView = {
-  tabs: [],
-  activeTab: null,
-  recentFiles: [],
-  visible: { left: 'Project', bottom: 'Terminal', right: null },
-  caret: null,
+/** The file an editor tab shows (the compared file for a diff), if any. */
+export function tabFile(tab: EditorTab): string | undefined {
+  return tab.kind === 'file' ? tab.path : tab.filePath
 }
 
-const savedViews = new Map<string, ProjectView>()
+const isUnder = (root: string, path: string | undefined): boolean => path !== undefined && (path === root || path.startsWith(`${root}/`))
 
-function currentView(s: WorkbenchState): ProjectView {
-  return { tabs: s.tabs, activeTab: s.activeTab, recentFiles: s.recentFiles, visible: s.visible, caret: s.caret }
-}
-
-/** Shows another open project, keeping the current one's tabs and tool windows for later. */
-export function switchProject(root: string): void {
+/**
+ * Makes another attached project the current one: the toolbar, terminal, git and run follow it.
+ * Tabs, tool window layout and recent files belong to the window, as in IntelliJ, so nothing else changes.
+ */
+export function switchProject(root: string, focusEditor = true): void {
   const s = workbench.get()
   const target = s.projects.find((p) => p.root === root)
   if (!target || s.project?.root === root) return
-  if (s.project) savedViews.set(s.project.root, currentView(s))
-  workbench.set({ project: target, ...(savedViews.get(root) ?? DEFAULT_VIEW), popup: null })
-  requestFocus('editor')
+  workbench.set({ project: target, popup: null })
+  if (focusEditor) requestFocus('editor')
+}
+
+/** Makes the project of a tab's file current (the deepest root wins for nested projects). */
+export function showTabProject(tabPath: string): void {
+  const s = workbench.get()
+  const tab = s.tabs.find((t) => t.path === tabPath)
+  const file = tab && tabFile(tab)
+  const owner = s.projects.filter((p) => isUnder(p.root, file)).sort((a, b) => b.root.length - a.root.length)[0]
+  if (owner && owner.root !== s.project?.root) switchProject(owner.root, false)
 }
 
 /** Adds a project the main process opened and shows it. */
@@ -129,26 +130,27 @@ export function addProject(project: ProjectInfo): void {
   switchProject(project.root)
 }
 
-/** Removes a project; returns the project now shown, if any. */
+/** Removes a project and closes its tabs; returns the project now shown, if any. */
 export function removeProject(root: string): ProjectInfo | null {
   const s = workbench.get()
   const index = s.projects.findIndex((p) => p.root === root)
   if (index < 0) return s.project
   const projects = s.projects.filter((p) => p.root !== root)
-  savedViews.delete(root)
-  if (s.project?.root !== root) {
-    workbench.set({ projects })
-    return s.project
-  }
-  const next = projects[Math.min(index, projects.length - 1)] ?? null
-  workbench.set({ projects, project: next, ...(next ? (savedViews.get(next.root) ?? DEFAULT_VIEW) : DEFAULT_VIEW) })
+  const tabs = s.tabs.filter((t) => !isUnder(root, tabFile(t)))
+  const activeTab = tabs.some((t) => t.path === s.activeTab) ? s.activeTab : (tabs[tabs.length - 1]?.path ?? null)
+  const recentFiles = s.recentFiles.filter((p) => !isUnder(root, p))
+  const next = s.project?.root === root ? (projects[Math.min(index, projects.length - 1)] ?? null) : s.project
+  workbench.set({ projects, project: next, tabs, activeTab, recentFiles, ...(activeTab === s.activeTab ? {} : { caret: null }) })
   return next
 }
 
-/** Cycles through open projects (NextProjectWindow / PreviousProjectWindow). */
+/** Cycles through the projects attached to this window; with only one, through the windows. */
 export function cycleProject(delta: 1 | -1): void {
   const { projects, project } = workbench.get()
-  if (projects.length < 2 || !project) return
+  if (projects.length < 2 || !project) {
+    window.anycode.send('window:cycle', delta)
+    return
+  }
   const index = projects.findIndex((p) => p.root === project.root)
   switchProject(projects[(index + delta + projects.length) % projects.length]!.root)
 }

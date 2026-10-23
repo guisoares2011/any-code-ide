@@ -6,13 +6,16 @@ import { Icon } from '../ui/Icon'
 
 export function StatusBar() {
   const project = useStore(workbench, (s) => s.project)
+  const projects = useStore(workbench, (s) => s.projects)
   const activeTab = useStore(workbench, (s) => s.activeTab)
   const caret = useStore(workbench, (s) => s.caret)
   const isFile = useStore(workbench, (s) => s.tabs.find((t) => t.path === s.activeTab)?.kind === 'file')
   const clients = useStore(bridgeStatus, (s) => s.clients)
   const running = useStore(bridgeStatus, (s) => s.running)
+  // The file's own project (it can be an attached one other than the current project).
+  const owner = projects.filter((p) => activeTab?.startsWith(`${p.root}/`)).sort((a, b) => b.root.length - a.root.length)[0] ?? project
   const crumbs =
-    project && activeTab && isFile ? [project.name, ...relativePath(project.root, activeTab).split('/')] : project ? [project.name] : []
+    owner && activeTab && isFile ? [owner.name, ...relativePath(owner.root, activeTab).split('/')] : project ? [project.name] : []
 
   return (
     <div className="status-bar">

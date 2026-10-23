@@ -117,6 +117,7 @@ export class LspRouter {
       params.rootPath = this.options.root
       params.workspaceFolders = [{ uri: rootUri, name: this.options.root.split('/').pop() ?? this.options.root }]
       params.clientInfo = { name: 'AnyCode' }
+      if (this.options.spec.initializationOptions !== undefined) params.initializationOptions = this.options.spec.initializationOptions
       message = { ...message, params }
     }
     if (method === 'textDocument/didOpen') {

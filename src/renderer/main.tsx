@@ -16,7 +16,7 @@ import { installEslint } from './lint/eslint'
 import { installSettings } from './settings/applySettings'
 import { installGitStatus } from './state/git'
 import { installKeymapDispatcher } from './keymap/service'
-import { workbench } from './state/workbench'
+import { showTabProject, switchProject, workbench } from './state/workbench'
 import { applyIslandsDark } from './theme/applyTheme'
 import { Workbench } from './workbench/Workbench'
 
@@ -45,6 +45,16 @@ async function main(): Promise<void> {
   }
   workbench.subscribe(syncProject)
   syncProject()
+  // The current project follows the active editor tab, so terminal, git and run match the file in view.
+  let lastTab: string | null = null
+  workbench.subscribe(() => {
+    const s = workbench.get()
+    if (s.activeTab === lastTab) return
+    lastTab = s.activeTab
+    if (s.activeTab) showTabProject(s.activeTab)
+  })
+  // Another window asked to open a project this one has: show it.
+  window.anycode.on('project:reveal', (root) => switchProject(root))
   if (!project) workbench.set({ popup: 'Projects' })
   installGitStatus()
 

@@ -44,6 +44,7 @@ describe('language server resolution', () => {
     const command = serverCommand('java', { root: '/p/app', appDir, env: { JAVA_HOME: '/nonexistent' } })
     expect(command.args).toContain(join(home, 'plugins', 'org.eclipse.equinox.launcher_1.8.0.jar'))
     expect(command.args[command.args.indexOf('-data') + 1]).toMatch(new RegExp(`^${appDir}/jdtls-workspaces/[0-9a-f]{40}$`))
+    expect(command.args).toContain('-Djava.import.generatesMetadataFilesAtProjectRoot=false')
   })
 
   it('explains how to install a missing server', () => {

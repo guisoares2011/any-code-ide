@@ -52,8 +52,8 @@ export function workbenchActions(): ActionDefinition[] {
     { id: 'Vcs.Push', perform: () => void pushCurrentBranch() },
     // The branch widget's popup (git4idea's Git.Branches; no default shortcut on macOS).
     { id: 'Git.Branches', text: 'Branches…', isEnabled: () => gitState.get().status.repository, perform: () => openPopup('Branches') },
-    { id: 'NextProjectWindow', isEnabled: () => workbench.get().projects.length > 1, perform: () => cycleProject(1) },
-    { id: 'PreviousProjectWindow', isEnabled: () => workbench.get().projects.length > 1, perform: () => cycleProject(-1) },
+    { id: 'NextProjectWindow', perform: () => cycleProject(1) },
+    { id: 'PreviousProjectWindow', perform: () => cycleProject(-1) },
     { id: '$LRU', text: 'Recent Projects', perform: () => openPopup('Projects') },
     { id: 'OpenFile', text: 'Open…', perform: () => void pickAndOpenProject() },
     { id: 'CloseProject', isEnabled: () => workbench.get().project !== null, perform: () => void closeCurrentProject() },

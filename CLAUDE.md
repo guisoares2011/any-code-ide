@@ -1,0 +1,144 @@
+# AnyCode
+
+IDE leve, inspirada no IntelliJ IDEA / WebStorm, para abrir **todos os projetos** (JS/TS, Java, Kotlin…) numa única aplicação, sem alternar entre WebStorm e IntelliJ. É **AI-first**: o fluxo principal de codificação é o Claude Code rodando via CLI, e a IDE existe para orquestrar, revisar e navegar o que a IA produz.
+
+## Princípios de produto (não negociáveis)
+
+1. **Keymap = IntelliJ.** O keymap padrão é o do IntelliJ para macOS (`Mac OS X 10.5+`, que herda de `$default`). Não inventar atalhos que conflitem com ele. Ações internas usam os **mesmos action IDs do IntelliJ** (`GotoFile`, `SearchEverywhere`, `ReformatCode`, `ActivateTerminalToolWindow`…) para que o mapeamento seja 1:1 e os XMLs de keymap sejam carregados direto, sem tradução manual.
+2. **Identidade visual = Islands Dark** (tema ativo no IntelliJ do usuário). Cores, espaçamentos, layout em "ilhas" arredondadas, barra superior com projeto/VCS/run e tool windows laterais seguem o IntelliJ New UI. Fonte do editor/terminal: JetBrains Mono (OFL); UI: Inter.
+3. **AI-first.** O terminal com `claude` é cidadão de primeira classe (painel inferior padrão, aberto por projeto, sessão preservada). Editor, diff viewer e árvore de projeto existem para revisar e ajustar o que o agente faz.
+4. **Simplificada.** Fora do escopo do v1: debugger (breakpoints, step, inspeção de variáveis), ferramentas de banco, profiler, refactorings semânticos profundos, sistema de plugins. Se uma feature não serve ao fluxo "IA escreve → humano revisa/navega/executa", ela espera. **Exceção: Run/Stop básico entra no v1** (ver seção própria), porque Run/Debug é o terceiro maior uso real do usuário no IntelliJ (`docs/reverse-engineering.md`, U3).
+5. **Multi-projeto.** Uma janela, vários projetos com switcher rápido (equivalente a `Open Recent` / `Switch Project`), cada um com seu terminal Claude, árvore e abas.
+
+## Stack (decisão padrão)
+
+- **Electron + TypeScript (strict) + React + Vite** (electron-vite). Escolhido em vez de Tauri porque não há toolchain Rust na máquina, e `node-pty`, Monaco, LSP clients e o Claude Agent SDK são nativos em TS.
+- **Editor:** Monaco. **Terminal:** xterm.js + node-pty.
+- **Linguagens via LSP** (processos gerenciados pelo main): **typescript-go** (TypeScript 7 nativo, `tsc --lsp --stdio`, instalado como `typescript-native`) para JS/TS, no lugar de vtsls/typescript-language-server por ser nativo e leve (~115 MB neste projeto); `jdtls` para Java; `kotlin-lsp` (open source da JetBrains) para Kotlin. ESLint fica para depois.
+- **Servidores Java/Kotlin:** o jdtls roda com o Java 21+ do sistema (`JAVA_HOME` → `/usr/libexec/java_home -v 21+` → `java`), com um diretório `-data` por projeto em `~/Library/Application Support/AnyCode/jdtls-workspaces/`. O kotlin-lsp roda via `bin/intellij-server --stdio`, com `--system-path` por projeto (`kotlin-system/`) e `--data-sharing=none` (sem telemetria). A licença dele é concedida automaticamente para Kotlin; não aceitar EULA em nome do usuário. Os servidores mandam avisos (`window/showMessage`) para a tool window Notifications.
+- Ao testar LSP com diretórios temporários, use `realpath`: `/var/folders` é symlink para `/private/var/folders`, e o jdtls não reconhece arquivos abertos pelo caminho com symlink.
+- **Cliente LSP:** o `monaco.lsp.MonacoLspClient` que vem com o Monaco 0.57, por trás de `src/renderer/lsp/router.ts`. O roteador filtra documentos por servidor, responde localmente o que não é dele, injeta `rootUri`, completa os `client/registerCapability` sem `registerOptions` (o jdtls manda assim e o cliente do Monaco quebrava), responde `workspace/configuration` e corrige a URI em minúsculas que o cliente envia em `didOpen`/`didChange`/`didClose` (bug do 0.57). Respostas de localização carregam os arquivos de destino como models antes de chegar ao Monaco, e o `registerEditorOpener` abre a aba. O mesmo roteador serve requests próprios do AnyCode (`documentSymbol` → tool window Structure). O servidor de cada linguagem sobe sob demanda, quando o primeiro arquivo dela é aberto.
+- **Git:** CLI `git` via processo filho.
+- **Testes:** Vitest (unit) e Playwright `_electron` (E2E).
+- **Package manager:** npm (Node 24; pnpm não está instalado).
+
+## Integração com Claude Code
+
+Três camadas, em ordem de prioridade:
+
+1. **Terminal embutido** rodando `claude` num PTY com `cwd` = raiz do projeto. Uma sessão por projeto; ao trocar de projeto, a sessão continua viva.
+2. **Bridge IDE ↔ Claude Code** (o mesmo mecanismo do `/ide` usado pelas extensões oficiais de VS Code e JetBrains): o AnyCode sobe um servidor MCP via WebSocket em `127.0.0.1`, escreve um lockfile em `~/.claude/ide/<porta>.lock` (com `pid`, `workspaceFolders`, `ideName: "AnyCode"`, `transport: "ws"`, `authToken`) e injeta `CLAUDE_CODE_SSE_PORT` + `ENABLE_IDE_INTEGRATION=true` no ambiente do terminal. Isso permite que o Claude abra arquivos, mostre diffs no diff viewer do AnyCode para aceitar/rejeitar, leia diagnostics do LSP e receba a seleção atual. O protocolo **não tem documentação oficial**. A referência de implementação é o `PROTOCOL.md` do [coder/claudecode.nvim](https://github.com/coder/claudecode.nvim) (MIT), que descreve o lockfile, a autenticação e as tools (`openFile`, `openDiff`, `getDiagnostics`, `getCurrentSelection`, `getOpenEditors`, notificação `selection_changed`…). Valide contra a versão instalada do `claude` (2.1.309 no momento) observando o comportamento com `capture-process` do REA. Não decompile o binário do Claude Code. Nunca logar o `authToken`.
+Estado (2026-10-23): camadas 1 e 2 implementadas (`src/main/bridge/`, `src/renderer/bridge/`) e validadas contra o `claude` 2.1.309, que conecta sozinho (ver `docs/reverse-engineering.md`, B1–B6). Para revalidar depois de atualizar o `claude`, rode `node scripts/run-bridge-probe.mjs`. Tools implementadas: `openFile`, `openDiff` (bloqueante: aceitar devolve `FILE_SAVED` + conteúdo final, e quem escreve o arquivo é o Claude; rejeitar ou fechar a aba devolve `DIFF_REJECTED`), `getCurrentSelection`, `getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `getDiagnostics` (markers do Monaco por enquanto), `checkDocumentDirty`, `saveDocument`, `close_tab` (não anunciada) e `closeAllDiffTabs`. Notificações: `selection_changed` (debounce de 100 ms) e `at_mentioned` (ação `AnyCode.SendSelectionToClaude`, sem atalho padrão porque ⌥⌘K é Commit and Push no keymap do IntelliJ). O lockfile respeita `CLAUDE_CONFIG_DIR`; os E2E usam um diretório temporário. Shift+Enter no terminal envia LF (o Ctrl+J que o Claude Code documenta como nova linha), já que o xterm.js 6 não implementa o protocolo de teclado do kitty (B4).
+3. **Futuro:** painel de chat nativo via Claude Agent SDK ou ACP (o IntelliJ do usuário já tem o agente `claude-acp` instalado em `~/Library/Application Support/JetBrains/acp-agents/`). Só depois que 1 e 2 estiverem sólidos.
+
+## Run/Stop básico (v1)
+
+Executar e parar o projeto sem sair da IDE. Não é um debugger.
+
+- **Configurações:** detectadas automaticamente na raiz do projeto: scripts do `package.json` (com o package manager detectado pelo lockfile), tasks do Gradle (`./gradlew` quando existir) e goals do Maven (`./mvnw` quando existir). O usuário também pode salvar comandos próprios por projeto. Importar run configurations do IntelliJ (`.idea/workspace.xml`, `.run/*.run.xml`) fica para depois.
+- **Execução:** processo filho via `node-pty` no processo main, com `cwd` = raiz do projeto. A saída vai para a tool window **Run** (âncora inferior, uma aba por execução, xterm.js) e os links `arquivo:linha` abrem no editor. Stop encerra o grupo de processos (SIGINT; se o processo não sair, SIGKILL após timeout). Cada projeto mantém suas execuções vivas ao trocar de projeto, como o terminal.
+- **Atalhos** (action IDs do IntelliJ; bindings efetivos no macOS conferidos em `actions-catalog.mac.json`): `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R, `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4. O seletor da barra superior usa o ID `RedesignedRunConfigurationSelector` (sem atalho).
+- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura, profiler, run configurations remotas e compound.
+
+## Engenharia reversa com REA
+
+A engenharia reversa é feita com o **REA** ([morluto/rea](https://github.com/morluto/rea), pacote npm `rea-agents`), servidor MCP que inspeciona apps instalados sem código-fonte e devolve conclusões com evidência.
+
+- **Registro:** MCP `rea` no escopo *local* deste projeto (só aparece aqui), fixado em `rea-agents@6.7.0`. O REA exige Node ≥ 24.22.1, e o Node do sistema (`/usr/local/bin/node`) é 24.14.1. Por isso o servidor roda com o Node keg-only do Homebrew em `/opt/homebrew/opt/node@24/bin`. Para usar a CLI: `PATH=/opt/homebrew/opt/node@24/bin:$PATH npx -y rea-agents@6.7.0 <comando> --json`.
+- **Skill:** `.claude/skills/reverse-engineer-anything/` (versão da tag `rea-agents-6.7.0`). Carregue-a antes de qualquer investigação.
+- **Atualizar:** trocar a versão em `claude mcp add --scope local rea …` e na skill, sempre juntas.
+- **Saída das análises:** o JSON de evidência é grande (≈5 MB para o bundle do IntelliJ). Salve em `reference/rea/` e consulte com `inspect-analysis-view` ou `jq`; não despeje no contexto.
+- **Ferramentas por alvo:**
+  - Bundles `.app`: `inspect-artifact`, `decode-interface-builder`, `inspect-asset-catalog` (estáticas, não abrem o app).
+  - Comportamento do `claude` CLI no terminal: `capture-process` (PTY), sem janelas.
+  - Apps Electron/JS: `analyze-javascript-application`.
+- **Proibido (background):** `capture-native-ui-scenario`, `capture-electron-scenario` de apps de terceiros e qualquer operação que abra Hopper/Ghidra ou a janela do alvo, a menos que o usuário peça. Hopper/Ghidra não estão configurados; não instalar sem aprovação.
+- O REA não decompila JVM fora de APK. Para os jars das IDEs JetBrains, use a extração direta descrita abaixo.
+
+## Referências das IDEs instaladas
+
+IntelliJ IDEA 2026.1 (`/Applications/IntelliJ IDEA.app`) e WebStorm 2025.3.4 (`/Applications/WebStorm.app`) servem de **referência somente leitura**.
+
+- Recursos ficam nos jars em `Contents/lib/`. Keymaps e temas estão em `intellij.platform.ide.impl.jar` (`keymaps/*.xml`, `themes/islands/*`, `themes/expUI/*`). Inspecione com `unzip -Z1 <jar>` e extraia com `unzip -p`/`unzip -j`.
+- Configuração do usuário (keymap/tema ativos, projetos recentes): `~/Library/Application Support/JetBrains/IntelliJIdea2026.1/options/`. Hoje não há keymap customizado (usa o padrão macOS) e o esquema de cores é `Islands Dark`. Nunca leia nem copie `idea.key`, `user.web.token` ou outros arquivos de licença/credencial.
+- Cópias já extraídas para estudo em `reference/jetbrains/` (gitignored):
+  - `keymaps/$default.xml`, `keymaps/Mac OS X 10.5+.xml`, `keymaps/Mac OS X.xml`, `keymaps/macOS System Shortcuts.xml`
+  - `themes/ManyIslandsDark.theme.json` (UI), `themes/IslandSchemeDark.xml` (cores do editor), além de Darcula/expUI/Light como base
+  - `actions/` (`*Actions.xml` + `ActionsBundle.properties`), `icons/PlatformIconMappings.json` e `derived/` (gerado por `scripts/reference/*.py`): `actions-catalog.mac.json` (action ID → nome + atalho efetivo no macOS), `islands-dark.resolved.json` (tokens do tema resolvidos em hex), `tool-windows.json` (layout + ícones expUI), `plugin-scan.json`
+  - `user/action-usage.intellij-2026.1.json`: ranking de uso real das ações pelo usuário
+- **Achados da engenharia reversa:** `docs/reverse-engineering.md`. Leia antes de implementar keymap/tema. Ponto crítico: `Mac OS X 10.5+` herda de `$default` com ⌃↔⌘ trocados nos atalhos herdados.
+- **Limite legal:** dados como keymaps, themes e ícones existem no repositório open source `JetBrains/intellij-community` (Apache-2.0). Qualquer coisa que **entre no produto** deve vir de lá, com atribuição em `THIRD_PARTY_NOTICES`. Não decompilar nem portar código de produtos proprietários (WebStorm, plugins Ultimate); comportamento é recriado a partir de observação e dos arquivos de dados. Não usar nomes, logos ou ícones de produto da JetBrains no branding do AnyCode.
+
+## Trabalhar em background (regra do usuário)
+
+O usuário trabalha em outras coisas enquanto o agente roda. **Nenhuma janela pode aparecer na tela.**
+
+- Nunca executar `open`, iniciar IntelliJ/WebStorm ou rodar `npm run dev` (abre janela Electron) sem o usuário pedir.
+- Para verificação visual, o app deve suportar `ANYCODE_HEADLESS=1`: `BrowserWindow` com `show: false`, screenshots via `webContents.capturePage()` salvos em disco. Os E2E com Playwright usam esse modo.
+- Comandos longos (builds, testes E2E, LSPs) rodam em background, nunca bloqueando o terminal.
+
+## Estrutura planejada
+
+```
+src/main/         processo main: janelas, fs, pty, gerenciador de LSP, servidor MCP do bridge Claude
+src/preload/      ponte IPC tipada (contextBridge)
+src/renderer/     UI React
+  keymap/         parser dos XMLs JetBrains → registry de ações por action ID
+  theme/          tokens do Islands Dark → CSS custom properties
+  editor/         Monaco + integração LSP
+  terminal/       xterm.js
+src/shared/       tipos e contratos de IPC compartilhados entre main e renderer
+resources/intellij-community/  dados Apache-2.0 do intellij-community (tag fixo, com manifest.json)
+reference/        material extraído das IDEs (não versionado)
+e2e/              testes Playwright `_electron`
+```
+
+Mapa do que existe hoje no renderer:
+- `keymap/`: `keystroke`/`shortcut` (formato Swing), `keymapXml` (XML de keymap e de plugin), `keymap` (resolução com semântica do IntelliJ), `macKeymap` (carrega `$default` → `Mac OS X 10.5+` + atalhos do plugin de terminal + gestos double-Shift/Ctrl + `componentShortcuts`), `dispatcher` (captura de teclas, chords, double-modifier, allowlist do terminal), `actions` (registry; vários handlers por ID, executa o primeiro habilitado) e `service` (singleton + `useActions`).
+- `theme/`: resolve o tema e expõe tokens como `--c-<cor>`/`--ui-<Chave>`. Também gera os temas do Monaco e do xterm a partir do esquema do editor.
+- `state/workbench.ts`: tool windows (layout padrão V2), abas, popups e pedidos de foco. `terminal/ptySessions.ts`: sessões PTY por grupo (Terminal, Run) que sobrevivem a esconder o painel.
+- Áreas de foco: `data-focus-area` (`editor`, `terminal`, `run`, `tree`, `popup`) decide quais handlers ficam habilitados.
+
+## Comandos
+
+- `npm run typecheck` / `npm run lint` / `npm test` (Vitest, unit)
+- `npm run test:e2e`: build + Playwright `_electron` com `ANYCODE_HEADLESS=1`. Os testes criam um projeto temporário e rodam com `ANYCODE_AGENT_COMMAND=""` (shell comum na aba do agente).
+- `npm run screenshot`: build + captura headless em `out/screenshots/main.png`. O app sai sozinho; prazo máximo de 60 s.
+- `npm run build` (saída em `out/`). `npm run dev` abre janela: **só quando o usuário pedir**.
+- `node scripts/install-language-servers.mjs [jdtls] [kotlin]`: baixa os servidores de Java (jdtls, ~50 MB) e Kotlin (kotlin-lsp, ~360 MB, 1,1 GB descompactado) para `~/Library/Application Support/AnyCode/language-servers/`, com verificação de SHA-256. O TypeScript não precisa de download. Os E2E de Java/Kotlin são pulados se o servidor não estiver instalado.
+- `npm run fetch:intellij`: baixa de novo os recursos do intellij-community no tag fixado em `scripts/fetch-intellij-community.mjs`. Rode depois de mudar `TAG` ou `FILES` e confira o `manifest.json`.
+
+Variáveis de ambiente do app:
+- `ANYCODE_HEADLESS=1`: janela oculta e sem ícone no Dock.
+- `ANYCODE_SCREENSHOT=<png>`: captura a janela quando o renderer avisa que está pronto.
+- `ANYCODE_EXIT_AFTER_SCREENSHOT=1`: sai depois da captura.
+- `ANYCODE_PROJECT=<dir>` ou `--project=<dir>`: projeto aberto no início (o padrão é o cwd).
+- `ANYCODE_AGENT_COMMAND`: comando da aba do agente (padrão `claude`; em headless, shell comum).
+- `ANYCODE_USER_DATA=<dir>`: diretório de dados do app (recentes…). Os E2E usam um temporário.
+- `ANYCODE_LSP_TRACE=1`: loga no main todas as mensagens LSP (método, id e trecho do payload), nos dois sentidos.
+- `ANYCODE_JDTLS_HOME` / `ANYCODE_KOTLIN_LSP_HOME`: usam um servidor instalado em outro lugar.
+- `ANYCODE_SCREENSHOT_DELAY_MS`: espera extra antes do screenshot (ex.: para o `claude` conectar).
+
+Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 baixa o binário sob demanda (`node node_modules/electron/install.js`). O `@lydell/node-pty` traz prebuilds N-API, sem compilação.
+
+## Convenções
+
+- TypeScript `strict`, sem `any`. Contratos de IPC definidos uma vez em `src/shared/` e usados dos dois lados.
+- Segurança do Electron: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. O renderer não acessa Node; tudo passa pelo preload.
+- Cores sempre via tokens do tema; nada de hex solto em componente.
+- Atalhos sempre registrados por action ID; nunca `onKeyDown` com tecla hardcoded em componente.
+- Cada atalho implementado ganha um teste que carrega o XML real do keymap e verifica o binding.
+
+## Roadmap do MVP (ordem)
+
+1. ✅ Shell da janela com layout Islands Dark: árvore de projeto, abas, editor Monaco, status bar
+2. ✅ Engine de keymap lendo os XMLs do IntelliJ
+3. ✅ Terminal embutido com `claude` por projeto
+4. ✅ Bridge IDE ↔ Claude Code (diffs, seleção, diagnostics)
+5. ✅ LSP de JS/TS (diagnostics → Problems e `getDiagnostics` do bridge, ⌘B, hover, completion, Structure)
+6. ✅ LSP de Java/Kotlin. O jdtls traz erros e ⌘B, mesmo sem build tool. O kotlin-lsp só analisa projetos Gradle/Maven; sem eles, Structure funciona e o aviso aparece em Notifications.
+7. ✅ Run/Stop básico (npm scripts, Gradle, Maven; tool window Run). Falta salvar comandos próprios por projeto.
+8. ✅ Painel Git: tool window Commit com checkboxes, diff HEAD ↔ Local, commit parcial com `git commit --only`, Commit and Push (define o upstream no primeiro push), cores `FILESTATUS_*` na árvore e nas abas, e atualização quando o agente commita (o watcher deixa passar `.git/index`, `HEAD` e `refs/heads`). Atalhos: `CheckinProject` ⌘K, `Vcs.Push` ⇧⌘K, `Diff.ShowDiff` ⌘D, ⌘⏎ (`Commit.Execute`). Falta o Rollback e o log (tool window Version Control).
+9. ✅ Multi-projeto: uma janela, vários projetos, cada um com as próprias abas, tool windows, terminais (com o seu `claude`), execuções e LSPs. O widget de projeto abre o popup Projects, que lista os abertos, os recentes (AnyCode + `recentProjects.xml` de todas as IDEs JetBrains instaladas), "Open…" e aceita um caminho digitado. Atalhos: `NextProjectWindow` ⌥⌘\`, `PreviousProjectWindow` ⇧⌥⌘\`, `CloseProject`, `$LRU`, `OpenFile`. O lockfile do bridge lista todas as raízes abertas. Na próxima abertura, reabre os projetos da sessão anterior; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
+
+Pendências conhecidas: Rollback e log no Git; comandos de Run salvos por projeto; ESLint no TS; tela de Settings; empacotamento como `.app` assinado.

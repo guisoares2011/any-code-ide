@@ -1,0 +1,15 @@
+node_modules/
+dist/
+out/
+.DS_Store
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Arquivos pessoais da IDE
+.idea/
+
+# Material extraído das IDEs JetBrains instaladas, apenas para estudo local
+reference/jetbrains/
+# Evidências geradas pelo REA
+reference/rea/

@@ -1,0 +1,916 @@
+/* Islands Dark layout. Colors come only from theme tokens set by applyTheme.ts:
+   --c-<named color> (Islands semantic tokens) and --ui-<Key> (theme ui keys). */
+
+:root {
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-size-ui: 13px;
+  --font-size-small: 12px;
+  /* Island.borderWidth is the gap around islands; Island.arc is the Swing arc diameter. */
+  --island-gap: calc(var(--ui-Island-borderWidth, 6) * 1px);
+  --island-radius: calc(var(--ui-Island-arc, 20) * 0.5px);
+  --component-radius: calc(var(--ui-Component-arc, 8) * 0.5px);
+  --toolbar-height: 40px;
+  --statusbar-height: 28px;
+  /* StripeToolbar.Button.size = 37,40 */
+  --stripe-width: 40px;
+  --stripe-button-height: 37px;
+  --row-height: calc(var(--ui-Tree-rowHeight, 24) * 1px);
+  --tab-height: calc(var(--ui-TabbedPane-tabHeight, 40) * 1px);
+  --header-height: 40px;
+  --tree-indent: 18px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--c-container-main-window-bg);
+  color: var(--c-text-default);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-control-brand-border);
+  outline-offset: -2px;
+}
+
+/* ── Workbench grid ─────────────────────────────────────────────────────── */
+
+.workbench {
+  display: grid;
+  grid-template-rows: var(--toolbar-height) 1fr var(--statusbar-height);
+  height: 100%;
+}
+
+.workbench-body {
+  display: flex;
+  min-height: 0;
+  padding: 0 0 0 0;
+}
+
+.workbench-center {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--island-gap);
+}
+
+.island {
+  background: var(--c-container-tool-window-bg);
+  border-radius: var(--island-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.island.editor-island {
+  background: var(--c-container-editor-bg);
+  flex: 1;
+}
+
+.side-panel {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.side-panel > .island {
+  flex: 1;
+}
+
+.bottom-panel {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.bottom-panel > .island {
+  flex: 1;
+}
+
+/* Splitters sit in the island gap. */
+.splitter {
+  flex-shrink: 0;
+  position: relative;
+}
+
+.splitter.vertical {
+  width: var(--island-gap);
+  cursor: col-resize;
+}
+
+.splitter.horizontal {
+  height: 0;
+  cursor: row-resize;
+}
+
+.splitter.horizontal::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--island-gap) * -1);
+  height: var(--island-gap);
+}
+
+/* ── Main toolbar ───────────────────────────────────────────────────────── */
+
+.main-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 84px; /* room for the traffic lights */
+  background: var(--ui-MainToolbar-background);
+  -webkit-app-region: drag;
+}
+
+.main-toolbar .toolbar-widget,
+.main-toolbar .toolbar-icon {
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-widget {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+  color: var(--c-text-default);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toolbar-widget.secondary {
+  font-weight: 400;
+}
+
+.toolbar-widget:hover,
+.toolbar-icon:hover {
+  background: var(--c-toolbar-bg-hovered);
+}
+
+.toolbar-widget:active,
+.toolbar-icon:active {
+  background: var(--c-toolbar-bg-pressed);
+}
+
+.toolbar-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--component-radius);
+}
+
+.toolbar-icon:disabled {
+  opacity: 0.4;
+}
+
+.toolbar-icon.run {
+  background: var(--c-toolbar-run-bg);
+}
+
+.toolbar-icon.run:hover {
+  background: var(--c-toolbar-run-bg-hovered);
+}
+
+.toolbar-icon.stop {
+  background: var(--c-toolbar-stop-bg);
+}
+
+.toolbar-icon.stop:hover {
+  background: var(--c-toolbar-stop-bg-hovered);
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.project-avatar {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c-text-over-accent);
+  background: linear-gradient(135deg, var(--ui-RecentProject-Color5-Avatar-Start), var(--ui-RecentProject-Color5-Avatar-End));
+}
+
+/* ── Stripes ────────────────────────────────────────────────────────────── */
+
+.stripe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--stripe-width);
+  flex-shrink: 0;
+  padding: 2px 0 6px;
+  gap: 2px;
+}
+
+.stripe-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stripe-separator {
+  width: 20px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--c-toolbar-border);
+}
+
+.stripe-spacer {
+  flex: 1;
+}
+
+.stripe-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--component-radius);
+}
+
+.stripe-button:hover {
+  background: var(--c-toolbar-bg-hovered);
+}
+
+.stripe-button.selected {
+  background: var(--c-toolbar-selected-bg);
+}
+
+.stripe-button.selected:hover {
+  background: var(--c-toolbar-selected-bg-hovered);
+}
+
+/* ── Tool window header ─────────────────────────────────────────────────── */
+
+.tool-window-header {
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
+  padding: 0 6px 0 12px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tool-window-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tool-window-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tool-window-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+  color: var(--c-text-default);
+  white-space: nowrap;
+}
+
+.tool-window-tab:hover {
+  background: var(--c-tab-bg-hovered);
+}
+
+.tool-window-tab.selected {
+  background: var(--c-toolbar-selected-bg);
+}
+
+.tool-window-tab .tab-close {
+  opacity: 0;
+}
+
+.tool-window-tab:hover .tab-close,
+.tool-window-tab.selected .tab-close {
+  opacity: 1;
+}
+
+.tool-window-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 2px;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--component-radius);
+}
+
+.icon-button:hover {
+  background: var(--c-toolbar-bg-hovered);
+}
+
+.icon-button.small {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.tool-window-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--c-text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── Tree ───────────────────────────────────────────────────────────────── */
+
+.tree {
+  height: 100%;
+  overflow: auto;
+  padding: 0 0 8px;
+  outline: none;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--row-height);
+  margin: 0 8px;
+  padding-right: 8px;
+  border-radius: var(--component-radius);
+  white-space: nowrap;
+}
+
+.tree-row:hover {
+  background: var(--c-selection-bg-hovered);
+}
+
+.tree-row.selected {
+  background: var(--c-selection-bg-inactive);
+}
+
+.tree:focus .tree-row.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.tree-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.tree-row .hint {
+  color: var(--c-text-muted);
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Editor ─────────────────────────────────────────────────────────────── */
+
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  height: var(--tab-height);
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 0 4px;
+  gap: 2px;
+}
+
+.editor-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 10px;
+  white-space: nowrap;
+  color: var(--c-text-default);
+}
+
+.editor-tab:hover {
+  background: var(--ui-EditorTabs-hoverBackground);
+}
+
+.editor-tab.selected::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: calc(var(--ui-EditorTabs-underlineHeight, 4) * 1px);
+  border-radius: calc(var(--ui-EditorTabs-underlineArc, 4) * 1px) calc(var(--ui-EditorTabs-underlineArc, 4) * 1px) 0 0;
+  background: var(--ui-EditorTabs-underlinedBorderColor);
+}
+
+.editor-tab.dirty .tab-name::after {
+  content: ' •';
+  color: var(--c-text-muted);
+}
+
+.editor-tab .tab-close {
+  opacity: 0;
+}
+
+.editor-tab:hover .tab-close,
+.editor-tab.selected .tab-close {
+  opacity: 1;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.editor-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  color: var(--c-text-muted);
+}
+
+.editor-placeholder .shortcut-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px 16px;
+  align-items: baseline;
+}
+
+.editor-placeholder .shortcut-row .label {
+  text-align: right;
+}
+
+.editor-placeholder .shortcut-row .keys {
+  color: var(--c-text-link);
+}
+
+/* ── Terminal ───────────────────────────────────────────────────────────── */
+
+.terminal-host {
+  position: absolute;
+  inset: 0 6px 6px 12px;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+.terminal-host .xterm-viewport {
+  background: transparent !important;
+}
+
+/* ── Status bar ─────────────────────────────────────────────────────────── */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px;
+  color: var(--c-text-secondary);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.status-bar .breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-bar .crumb {
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.status-bar .crumb:hover,
+.status-bar .widget:hover {
+  background: var(--c-toolbar-bg-hovered);
+}
+
+.status-bar .widget {
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+/* ── Popups ─────────────────────────────────────────────────────────────── */
+
+.popup-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  z-index: 100;
+}
+
+.popup {
+  width: min(720px, 80vw);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-container-popup-bg);
+  border: 1px solid var(--c-container-popup-border);
+  border-radius: calc(var(--ui-Popup-Selection-arc, 16) * 0.5px + 4px);
+  box-shadow: 0 12px 40px var(--c-transparent-black-40);
+  overflow: hidden;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+}
+
+.popup-tab {
+  padding: 4px 8px;
+  border-radius: var(--component-radius);
+  color: var(--c-text-secondary);
+}
+
+.popup-tab.selected {
+  background: var(--c-toolbar-selected-bg);
+  color: var(--c-text-default);
+}
+
+.popup-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: var(--component-radius);
+  background: var(--c-control-bg);
+  border: 1px solid var(--c-control-border);
+}
+
+.popup-search:focus-within {
+  border-color: var(--c-control-brand-border);
+}
+
+.popup-search input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--c-text-default);
+  font: inherit;
+}
+
+.popup-list {
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.popup-group {
+  padding: 8px 8px 4px;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.popup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+  white-space: nowrap;
+}
+
+.popup-item.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.popup-item .hint {
+  color: var(--c-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.popup-item .shortcut {
+  margin-left: auto;
+  color: var(--c-text-secondary);
+}
+
+.popup-item mark {
+  background: none;
+  color: var(--c-popup-completion-match-text);
+  font-weight: 600;
+}
+
+.popup-empty {
+  padding: 16px;
+  color: var(--c-text-muted);
+  text-align: center;
+}
+
+.popup-footer {
+  padding: 6px 12px;
+  color: var(--ui-Popup-Advertiser-foreground);
+  background: var(--ui-Popup-Advertiser-background);
+  font-size: var(--font-size-small);
+  border-top: 1px solid var(--c-container-popup-border);
+}
+
+/* ── Scrollbars (ScrollBar.Transparent.*) ───────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ui-ScrollBar-Transparent-trackColor);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ui-ScrollBar-Transparent-thumbColor);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ui-ScrollBar-Transparent-hoverThumbColor);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.button {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--component-radius);
+  font-weight: 500;
+}
+
+.button.primary {
+  background: var(--ui-Button-default-startBackground);
+  color: var(--ui-Button-default-foreground);
+}
+
+.button.primary:hover {
+  background: var(--c-accent-brand-bg-secondary, var(--ui-Button-default-startBackground));
+}
+
+.button.secondary {
+  background: var(--c-control-bg-raised);
+  border: 1px solid var(--c-control-border);
+  color: var(--c-text-default);
+}
+
+/* ── Claude Code diff review ────────────────────────────────────────────── */
+
+.diff-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.diff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--c-container-editor-border);
+}
+
+.diff-title {
+  flex: 1;
+  color: var(--c-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-title strong {
+  color: var(--c-text-default);
+  font-weight: 600;
+}
+
+.diff-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-tab.diff .tab-name {
+  color: var(--c-text-link);
+}
+
+/* ── Claude connection widget ───────────────────────────────────────────── */
+
+.status-bar .bridge-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--c-text-disabled);
+}
+
+.status-bar .bridge-dot.connected {
+  background: var(--c-text-success);
+}
+
+.tree-row .problem-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Notifications ──────────────────────────────────────────────────────── */
+
+.notifications {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: text;
+}
+
+.notification {
+  padding: 10px 12px;
+  border-radius: var(--component-radius);
+  background: var(--c-feedback-bg);
+  border: 1px solid var(--c-feedback-border);
+}
+
+.notification.error {
+  background: var(--c-feedback-error-bg);
+  border-color: var(--c-feedback-error-border);
+}
+
+.notification.warning {
+  background: var(--c-feedback-warning-bg);
+  border-color: var(--c-feedback-warning-border);
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notification-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+.notification-time {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.notification-message {
+  margin-top: 4px;
+  color: var(--c-text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.notifications-clear {
+  align-self: flex-start;
+}
+
+.stripe-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-accent-brand-bg);
+}
+
+.stripe-button {
+  position: relative;
+}
+
+/* ── VCS file status (FILESTATUS_* of the editor scheme) ───────────────── */
+
+.vcs-modified { color: var(--filestatus-modified); }
+.vcs-added { color: var(--filestatus-added); }
+.vcs-deleted { color: var(--filestatus-deleted); }
+.vcs-renamed { color: var(--filestatus-renamed); }
+.vcs-untracked { color: var(--filestatus-untracked); }
+.vcs-conflicted { color: var(--filestatus-conflicted); }
+
+/* ── Commit tool window ─────────────────────────────────────────────────── */
+
+.commit-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.commit-view .tree {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.tree-row input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--c-accent-brand-bg);
+}
+
+.tree-row .group-count {
+  color: var(--c-text-muted);
+}
+
+.commit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--c-container-tool-window-border);
+}
+
+.commit-message {
+  min-height: 72px;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: var(--component-radius);
+  border: 1px solid var(--c-control-border);
+  background: var(--c-control-bg);
+  color: var(--c-text-default);
+  font: inherit;
+  outline: none;
+  user-select: text;
+}
+
+.commit-message:focus {
+  border-color: var(--c-control-brand-border);
+}
+
+.commit-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+}

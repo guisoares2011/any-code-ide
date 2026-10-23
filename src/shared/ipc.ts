@@ -1,0 +1,173 @@
+import type { AtMention, BridgeStatus, EditorSelection, McpToolResult } from './bridge'
+import type { GitCommandResult, GitStatus } from './git'
+import type { LanguageServerId } from './languageServers'
+
+// IPC contract shared by main, preload and renderer. Every channel is declared here once;
+// the preload only forwards channels listed in these constants.
+
+export interface AppInfo {
+  platform: NodeJS.Platform
+  headless: boolean
+  version: string
+  /**
+   * Command line of the agent terminal tab, e.g. ["claude"]; null means a plain login shell
+   * (default in headless runs so tests never start a real Claude session).
+   */
+  agentCommand: string[] | null
+}
+
+export interface ProjectInfo {
+  root: string
+  name: string
+}
+
+export interface RecentProject {
+  path: string
+  name: string
+  /** "AnyCode", or the JetBrains IDE that remembers it ("IntelliJ IDEA", "WebStorm"...). */
+  source: string
+  /** Epoch milliseconds of the last activation. */
+  lastOpened: number
+}
+
+export type DirEntryKind = 'file' | 'directory' | 'symlink'
+
+export interface DirEntry {
+  name: string
+  path: string
+  kind: DirEntryKind
+}
+
+export type FileContent =
+  | { kind: 'text'; content: string }
+  | { kind: 'binary'; size: number }
+  | { kind: 'too-large'; size: number }
+
+export interface PtyCreateOptions {
+  cwd: string
+  cols: number
+  rows: number
+  /** Command line to run instead of the user's login shell, e.g. ["claude"]. */
+  command?: string[]
+}
+
+export interface PtyExit {
+  id: string
+  exitCode: number
+  signal: number | null
+}
+
+export interface RunConfiguration {
+  /** Stable id within the project, e.g. "npm:dev" or "gradle:test". */
+  id: string
+  name: string
+  kind: 'npm' | 'gradle' | 'maven'
+  command: string[]
+}
+
+/** Request/response channels: renderer -> main via ipcRenderer.invoke. */
+export interface InvokeChannels {
+  'app:info': { args: []; result: AppInfo }
+  /** Projects to show at startup and which one is current. */
+  'project:initial': { args: []; result: { projects: ProjectInfo[]; current: string | null } }
+  /** Opens a directory as a project (adds it to the allowed roots); null when it is not a directory. */
+  'project:open': { args: [path: string]; result: ProjectInfo | null }
+  'project:close': { args: [root: string]; result: void }
+  'project:recent': { args: []; result: RecentProject[] }
+  /** Native folder picker; null when cancelled or in headless mode. */
+  'project:pickFolder': { args: []; result: string | null }
+  'fs:readDir': { args: [path: string]; result: DirEntry[] }
+  'fs:readFile': { args: [path: string]; result: FileContent }
+  'fs:writeFile': { args: [path: string, content: string]; result: void }
+  /** Files of a project root, relative to it (git ls-files when available). */
+  'fs:listFiles': { args: [root: string]; result: string[] }
+  /** Current branch name, a short commit hash when detached, or null outside a git work tree. */
+  'git:branch': { args: [root: string]; result: string | null }
+  'git:status': { args: [root: string]; result: GitStatus }
+  /** File contents at HEAD; null for files not in HEAD. */
+  'git:headContent': { args: [root: string, path: string]; result: string | null }
+  /** Commits exactly `paths` (absolute), adding untracked ones first. */
+  'git:commit': { args: [root: string, message: string, paths: string[]]; result: GitCommandResult }
+  'git:push': { args: [root: string]; result: GitCommandResult }
+  'pty:create': { args: [options: PtyCreateOptions]; result: string }
+  'pty:write': { args: [id: string, data: string]; result: void }
+  'pty:resize': { args: [id: string, cols: number, rows: number]; result: void }
+  'pty:kill': { args: [id: string]; result: void }
+  /** Interrupts the foreground job (^C), then kills the process group if it outlives the grace period. */
+  'pty:stop': { args: [id: string]; result: void }
+  'run:configurations': { args: [root: string]; result: RunConfiguration[] }
+  /** Answer to a bridge:toolCall event. */
+  'bridge:toolResult': { args: [requestId: string, result: McpToolResult]; result: void }
+  'bridge:status': { args: []; result: BridgeStatus }
+  /** Starts (or reuses) a language server for a project root; null when it cannot run. */
+  'lsp:start': { args: [server: LanguageServerId, root: string]; result: string | null }
+}
+
+/** Fire-and-forget channels: renderer -> main via ipcRenderer.send. */
+export interface SendChannels {
+  'app:rendererReady': []
+  /** The project shown in the window changed (remembered for the next start). */
+  'project:activated': [root: string]
+  /** Forwarded to Claude Code as the selection_changed notification. */
+  'bridge:selectionChanged': [selection: EditorSelection]
+  /** Forwarded to Claude Code as the at_mentioned notification. */
+  'bridge:atMentioned': [mention: AtMention]
+  /** A JSON-RPC message for a language server session. */
+  'lsp:send': [sessionId: string, message: unknown]
+}
+
+/** Events: main -> renderer via webContents.send. */
+export interface EventChannels {
+  'pty:data': [id: string, data: string]
+  'pty:exit': [exit: PtyExit]
+  /** A Claude Code tool call the renderer must answer with bridge:toolResult. */
+  'bridge:toolCall': [requestId: string, name: string, args: Record<string, unknown>]
+  'bridge:status': [status: BridgeStatus]
+  /** Files or directories changed on disk under an opened project (absolute paths). */
+  'fs:changed': [paths: string[]]
+  'lsp:message': [sessionId: string, message: unknown]
+  'lsp:exit': [sessionId: string, code: number | null]
+}
+
+export const INVOKE_CHANNELS = [
+  'app:info',
+  'project:initial',
+  'project:open',
+  'project:close',
+  'project:recent',
+  'project:pickFolder',
+  'fs:readDir',
+  'fs:readFile',
+  'fs:writeFile',
+  'fs:listFiles',
+  'git:branch',
+  'git:status',
+  'git:headContent',
+  'git:commit',
+  'git:push',
+  'pty:create',
+  'pty:write',
+  'pty:resize',
+  'pty:kill',
+  'pty:stop',
+  'run:configurations',
+  'bridge:toolResult',
+  'bridge:status',
+  'lsp:start',
+] as const satisfies readonly (keyof InvokeChannels)[]
+
+export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send'] as const satisfies readonly (keyof SendChannels)[]
+
+export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'lsp:message', 'lsp:exit'] as const satisfies readonly (keyof EventChannels)[]
+
+export type InvokeChannel = keyof InvokeChannels
+export type InvokeArgs<C extends InvokeChannel> = InvokeChannels[C]['args']
+export type InvokeResult<C extends InvokeChannel> = InvokeChannels[C]['result']
+
+/** The object the preload exposes as `window.anycode`. */
+export interface AnyCodeBridge {
+  invoke<C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>>
+  send<C extends keyof SendChannels>(channel: C, ...args: SendChannels[C]): void
+  /** Subscribes to a main-process event; returns the unsubscribe function. */
+  on<C extends keyof EventChannels>(channel: C, listener: (...args: EventChannels[C]) => void): () => void
+}

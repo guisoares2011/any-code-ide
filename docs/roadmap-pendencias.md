@@ -1,6 +1,6 @@
 # Pendências do roadmap
 
-Estado em 2026-10-23. O MVP (itens 1–9 do roadmap no `CLAUDE.md`) está pronto, e os itens 1–5 abaixo também. Do item 6 falta só a assinatura com Developer ID, que depende do usuário. Este arquivo lista o que falta, na ordem sugerida, com o plano e os dados já levantados para quem continuar em outra sessão. Ao concluir um item, marque-o aqui e atualize o `CLAUDE.md`.
+Estado em 2026-10-23. O MVP (itens 1–9 do roadmap no `CLAUDE.md`) está pronto, e os itens 1–5 abaixo também. O item 6 também: o app é só para uso local e fica com assinatura ad-hoc. Este arquivo lista o que falta, na ordem sugerida, com o plano e os dados já levantados para quem continuar em outra sessão. Ao concluir um item, marque-o aqui e atualize o `CLAUDE.md`.
 
 Regras que valem para todos os itens (detalhes no `CLAUDE.md`):
 - Nenhuma janela na tela: verificação só com `ANYCODE_HEADLESS=1` (E2E e `npm run screenshot`).
@@ -67,7 +67,7 @@ Os atalhos abaixo vêm de `reference/jetbrains/derived/actions-catalog.mac.json`
 ## 6. Empacotamento como `.app` assinado
 
 - [x] **Feito com assinatura ad-hoc** (`npm run package`, detalhes no `CLAUDE.md`, seção Empacotamento). electron-builder gerando `AnyCode.app`/`.dmg` arm64.
-- [ ] **Falta:** assinatura com Developer ID e notarização. Hoje não há certificado no Keychain (`security find-identity` → 0).
+- [x] Assinatura com Developer ID e notarização: **descartadas**. O app é só para uso local (decisão do usuário em 2026-10-23).
 - Itens a resolver:
   - `asarUnpack` para `@lydell/node-pty` (binário N-API) e `typescript-native` (binário do tsgo);
   - `resources/intellij-community` como `extraResources`, revisando como o main resolve o caminho em produção (`app.isPackaged` / `process.resourcesPath`);

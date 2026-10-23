@@ -40,9 +40,7 @@ mac:
       arch: arm64
     - target: zip
       arch: arm64
-  # Ad-hoc signature until a "Developer ID Application" certificate is available; then remove
-  # this line (electron-builder finds the identity in the Keychain), set hardenedRuntime: true and
-  # configure notarization (see docs/roadmap-pendencias.md).
+  # Local use only (no distribution): ad-hoc signature, no hardened runtime, no notarization.
   identity: '-'
   hardenedRuntime: false
   entitlements: build/entitlements.mac.plist

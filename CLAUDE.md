@@ -81,7 +81,7 @@ Preview renderizado de `.md` com blocos de shell executáveis (`src/renderer/mar
 - `electron-builder.yml`: `AnyCode.app` arm64, ícone próprio (`build/icon.svg`: chaves com um prompt, sem marcas da JetBrains), `THIRD_PARTY_NOTICES.md` e as licenças do intellij-community em `Resources/`.
 - Só as dependências do **main** ficam em `dependencies` (`@lydell/node-pty`, `fast-xml-parser`, `typescript-native`, `ws`), porque o electron-builder empacota só elas. Tudo que o renderer usa é embutido pelo Vite e fica em `devDependencies`. Dependência nova usada no main vai em `dependencies`.
 - O node-pty fica fora do asar (`asarUnpack`). O typescript-go vai inteiro para `Resources/typescript-go/` (binário + `lib.*.d.ts`, que o electron-builder removeria de `node_modules`), e `typescriptGoBinary()` usa essa cópia quando ela existe. O worker do ESLint roda de dentro do asar.
-- **Assinatura:** hoje ad-hoc (`identity: '-'`), porque não há certificado "Developer ID Application" no Keychain. Roda nesta máquina, mas o Gatekeeper bloqueia em outra. Para distribuir: instalar o certificado, remover `identity`, ligar `hardenedRuntime` (as entitlements já estão em `build/entitlements.mac.plist`) e configurar a notarização com um perfil do `notarytool`. Pedir as credenciais ao usuário; nunca colocá-las no repositório.
+- **Uso só local (decisão do usuário):** o app não é distribuído, então fica com assinatura ad-hoc (`identity: '-'`) e sem notarização. Não pedir certificado nem configurar notarização. Gerado nesta máquina, não recebe quarentena e abre normalmente.
 
 ## Settings
 
@@ -200,4 +200,4 @@ Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 
    - A árvore do projeto esconde a lista padrão "Ignored files and folders" do IntelliJ (`.git`, `.DS_Store`, `__pycache__`…).
 9. ✅ Multi-projeto: uma janela, vários projetos, cada um com as próprias abas, tool windows, terminais (com o seu `claude`), execuções e LSPs. O widget de projeto abre o popup Projects, que lista os abertos, os recentes (AnyCode + `recentProjects.xml` de todas as IDEs JetBrains instaladas), "Open…" e aceita um caminho digitado. Atalhos: `NextProjectWindow` ⌥⌘\`, `PreviousProjectWindow` ⇧⌥⌘\`, `CloseProject`, `$LRU`, `OpenFile`. O lockfile do bridge lista todas as raízes abertas. Na próxima abertura, reabre os projetos da sessão anterior; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
 
-Pendências conhecidas: assinatura com Developer ID e notarização (depende do certificado do usuário); grafo de branches no Log; edição de keymap. Plano detalhado e estado de cada uma em `docs/roadmap-pendencias.md`.
+Pendências conhecidas: grafo de branches no Log; edição de keymap. Plano detalhado e estado de cada uma em `docs/roadmap-pendencias.md`.

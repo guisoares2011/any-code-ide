@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- AnyCode: braces around a terminal prompt (an editor driven from the terminal). -->
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3D7EF7"/>
+      <stop offset="1" stop-color="#7547E3"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#background)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#shine)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M400 290 C345 290 330 318 330 368 L330 452 C330 488 314 508 276 512 C314 516 330 536 330 572 L330 656 C330 706 345 734 400 734"/>
+    <path d="M624 290 C679 290 694 318 694 368 L694 452 C694 488 710 508 748 512 C710 516 694 536 694 572 L694 656 C694 706 679 734 624 734"/>
+    <path d="M440 432 L508 486 L440 540"/>
+  </g>
+  <rect x="530" y="548" width="92" height="44" rx="12" fill="#FFC15C"/>
+</svg>

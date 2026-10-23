@@ -8,6 +8,7 @@ import { createStore, useStore, type Store } from '../state/store'
 import { workbench } from '../state/workbench'
 import { loadIslandsDarkScheme } from '../theme/islandsDark'
 import { terminalThemeFromScheme } from '../theme/terminalTheme'
+import { currentSettings } from '../state/settings'
 
 export interface SessionInfo {
   id: string
@@ -81,7 +82,7 @@ export class SessionGroup {
     listen()
     const term = new Terminal({
       fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 13,
+      fontSize: currentSettings().terminal.fontSize,
       lineHeight: 1.2,
       cursorBlink: true,
       scrollback: 10_000,
@@ -222,6 +223,11 @@ export class SessionGroup {
     this.fitActive()
   }
 
+  setFontSize(size: number): void {
+    for (const session of this.sessions.values()) session.term.options.fontSize = size
+    this.fitActive()
+  }
+
   fitActive(): void {
     const session = this.active()
     if (session && session.element.offsetParent !== null) session.fit.fit()
@@ -319,6 +325,11 @@ export function useTerminalGroup(): SessionGroup {
 
 export function useRunGroup(): SessionGroup {
   return runGroupFor(useStore(workbench, (s) => s.project?.root))
+}
+
+/** Applies a terminal font size to every open session (Settings). */
+export function setTerminalFontSize(size: number): void {
+  for (const group of [...terminalGroups.values(), ...runGroups.values(), detached]) group.setFontSize(size)
 }
 
 /** Kills every session of a closed project. */

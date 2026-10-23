@@ -4,7 +4,7 @@ import { createStore } from './store'
 
 export type Anchor = 'left' | 'bottom' | 'right'
 
-export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Problems View' | 'Terminal' | 'Run' | 'Notifications' | 'Maven'
+export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Version Control' | 'Problems View' | 'Terminal' | 'Run' | 'Notifications' | 'Maven'
 
 export interface ToolWindowSpec {
   id: ToolWindowId
@@ -25,6 +25,8 @@ export const TOOL_WINDOWS: readonly ToolWindowSpec[] = [
   { id: 'Project', anchor: 'left', title: 'Project', icon: 'toolwindows/project@20x20', activateActionId: 'ActivateProjectToolWindow' },
   { id: 'Commit', anchor: 'left', title: 'Commit', icon: 'toolwindows/commit@20x20', activateActionId: 'ActivateCommitToolWindow' },
   { id: 'Structure', anchor: 'left', title: 'Structure', icon: 'toolwindows/structure@20x20', activateActionId: 'ActivateStructureToolWindow' },
+  // Titled "Git" like IntelliJ's stripe in a git project.
+  { id: 'Version Control', anchor: 'bottom', title: 'Git', icon: 'toolwindows/vcs@20x20', activateActionId: 'ActivateVersionControlToolWindow' },
   { id: 'Problems View', anchor: 'bottom', title: 'Problems', icon: 'toolwindows/problems@20x20', activateActionId: 'ActivateProblemsViewToolWindow' },
   { id: 'Terminal', anchor: 'bottom', title: 'Terminal', icon: 'toolwindow/terminal@20x20', activateActionId: 'ActivateTerminalToolWindow' },
   { id: 'Run', anchor: 'bottom', title: 'Run', icon: 'toolwindows/run@20x20', activateActionId: 'ActivateRunToolWindow' },
@@ -38,10 +40,13 @@ export interface EditorTab {
   /** Unique key: the file path, or `diff:<tab name>` for a Claude Code diff. */
   path: string
   name: string
-  /** file: an editor; diff: a change proposed by Claude; vcs-diff: HEAD against the local file. */
+  /** file: an editor; diff: a change proposed by Claude; vcs-diff: HEAD against the local file, or a commit's change. */
   kind: 'file' | 'diff' | 'vcs-diff'
   /** For vcs-diff tabs, the file being compared. */
   filePath?: string
+  /** For a commit's change: the commit (compared with its first parent) and the absolute path before a rename. */
+  revision?: string
+  originalPath?: string
 }
 
 export const DIFF_TAB_PREFIX = 'diff:'
@@ -211,6 +216,21 @@ export function openVcsDiffTab(path: string): void {
     tabs: s.tabs.some((t) => t.path === key)
       ? s.tabs
       : [...s.tabs, { path: key, name: `${basename(path)} (HEAD ↔ Local)`, kind: 'vcs-diff' as const, filePath: path }],
+    activeTab: key,
+  }))
+  requestFocus('editor')
+}
+
+/** Opens (or re-activates) the change a commit made to a file: `<hash>^` ↔ `<hash>`, both read-only. */
+export function openCommitDiffTab(hash: string, path: string, originalPath?: string): void {
+  const key = `vcsdiff:${hash}:${path}`
+  workbench.set((s) => ({
+    tabs: s.tabs.some((t) => t.path === key)
+      ? s.tabs
+      : [
+          ...s.tabs,
+          { path: key, name: `${basename(path)} (${hash.slice(0, 8)})`, kind: 'vcs-diff' as const, filePath: path, revision: hash, ...(originalPath ? { originalPath } : {}) },
+        ],
     activeTab: key,
   }))
   requestFocus('editor')

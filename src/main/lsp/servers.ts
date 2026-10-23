@@ -21,10 +21,14 @@ export interface ServerContext {
 
 const require = createRequire(__filename)
 
-/** Native typescript-go binary from the platform package that `typescript-native` (TS 7) installs. */
+/** Native typescript-go binary: bundled in the packaged app, else from the platform package `typescript-native` (TS 7) installs. */
 export function typescriptGoBinary(): string {
+  const executable = process.platform === 'win32' ? 'tsc.exe' : 'tsc'
+  // The packaged app carries it as a resource (electron-builder.yml), with its lib.*.d.ts.
+  const packaged = process.resourcesPath ? join(process.resourcesPath, 'typescript-go', executable) : ''
+  if (packaged && existsSync(packaged)) return packaged
   const manifest = require.resolve(`@typescript/typescript-${process.platform}-${process.arch}/package.json`)
-  return join(dirname(manifest), 'lib', process.platform === 'win32' ? 'tsc.exe' : 'tsc')
+  return join(dirname(manifest), 'lib', executable)
 }
 
 /** Compares dotted numeric versions ("1.63.0" < "1.100.0"). */
@@ -141,6 +145,22 @@ export function findKotlinLauncher(home: string): string | null {
     if (deprecated) return deprecated
   }
   return null
+}
+
+/** Where a server is installed (Settings shows it), or null when it is not. */
+export function serverLocation(server: LanguageServerId, appDir: string, env: NodeJS.ProcessEnv): string | null {
+  switch (server) {
+    case 'typescript':
+      try {
+        return typescriptGoBinary()
+      } catch {
+        return null
+      }
+    case 'java':
+      return env.ANYCODE_JDTLS_HOME ?? installedServer(appDir, 'jdtls')
+    case 'kotlin':
+      return env.ANYCODE_KOTLIN_LSP_HOME ?? installedServer(appDir, 'kotlin')
+  }
 }
 
 export function serverCommand(server: LanguageServerId, context: ServerContext): ServerCommand {

@@ -8,8 +8,17 @@ import { assertInsideProject } from './project'
 const MAX_TEXT_BYTES = 5 * 1024 * 1024
 const BINARY_SNIFF_BYTES = 8000
 
+/**
+ * IntelliJ's default "Ignored files and folders" (FileTypeManager): never shown in the project
+ * tree. `*~` covers editor backup files.
+ */
+const IGNORED_NAMES = new Set(['.DS_Store', '.git', '.hg', '.svn', 'CVS', '__pycache__', '_svn', 'vssver.scc', 'vssver2.scc'])
+const IGNORED_SUFFIXES = ['.pyc', '.pyo', '.rbc', '.yarb', '~']
+
+export const isIgnoredName = (name: string): boolean => IGNORED_NAMES.has(name) || IGNORED_SUFFIXES.some((suffix) => name.endsWith(suffix))
+
 export async function readDirEntries(dir: string): Promise<DirEntry[]> {
-  const entries = await readdir(dir, { withFileTypes: true })
+  const entries = (await readdir(dir, { withFileTypes: true })).filter((entry) => !isIgnoredName(entry.name))
   return entries.map((entry) => ({
     name: entry.name,
     path: join(dir, entry.name),

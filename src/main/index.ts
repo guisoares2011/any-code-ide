@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path'
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import { createBridge, failPendingToolCalls } from './bridge'
 import { registerFsHandlers } from './fs'
+import { registerEslintHandlers, stopAllEslint, stopEslint } from './eslint/index'
 import { registerGitHandlers } from './git'
+import { currentSettings, registerSettingsHandlers } from './settings'
 import { emit, handle, onSend } from './ipc'
 import { registerLspHandlers, stopAllLanguageServers } from './lsp/manager'
 import { homedir } from 'node:os'
@@ -77,11 +79,10 @@ async function captureScreenshot(window: BrowserWindow, path: string): Promise<v
   console.log(`[anycode] screenshot saved to ${target}`)
 }
 
-/** ANYCODE_AGENT_COMMAND overrides the agent tab command ("" = plain shell). */
+/** Agent tab command: ANYCODE_AGENT_COMMAND, else the setting ("" = plain shell); headless runs default to a shell. */
 function agentCommand(): string[] | null {
-  const configured = process.env.ANYCODE_AGENT_COMMAND
-  if (configured !== undefined) return configured.trim() ? configured.trim().split(/\s+/) : null
-  return headless ? null : ['claude']
+  const configured = process.env.ANYCODE_AGENT_COMMAND ?? (headless ? '' : currentSettings().terminal.agentCommand)
+  return configured.trim() ? configured.trim().split(/\s+/) : null
 }
 
 handle('app:info', () => ({ platform: process.platform, headless, version: app.getVersion(), agentCommand: agentCommand() }))
@@ -102,9 +103,11 @@ onSend('project:activated', (root) => {
   void session.write(openRoots(), root)
   void recent.touch(root)
 })
+registerSettingsHandlers(join(app.getPath('userData'), 'settings.json'))
 registerFsHandlers()
 registerGitHandlers()
 registerRunHandlers(app.getPath('userData'))
+registerEslintHandlers()
 
 // Claude Code connects here (/ide); terminals get CLAUDE_CODE_SSE_PORT so `claude` finds it.
 const bridge = createBridge({
@@ -138,6 +141,7 @@ handle('project:open', async (path) => {
 })
 handle('project:close', async (root) => {
   closeProject(root)
+  stopEslint(root)
   watchers.get(root)?.()
   watchers.delete(root)
   await bridge.updateWorkspaceFolders()
@@ -195,6 +199,7 @@ void app.whenReady().then(async () => {
 app.on('before-quit', () => {
   killAllPtys()
   stopAllLanguageServers()
+  stopAllEslint()
 })
 app.on('will-quit', () => {
   for (const stop of watchers.values()) stop()

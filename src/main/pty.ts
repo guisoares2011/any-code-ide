@@ -4,6 +4,7 @@ import type { WebContents } from 'electron'
 import type { PtyCreateOptions } from '@shared/ipc'
 import { emit, handle } from './ipc'
 import { assertInsideProject } from './project'
+import { userShell } from './settings'
 
 interface Session {
   pty: IPty
@@ -75,7 +76,7 @@ function flush(id: string): void {
 
 export function createPty(owner: WebContents, options: PtyCreateOptions, extraEnv: Record<string, string> = {}): string {
   const cwd = assertInsideProject(options.cwd)
-  const { file, args } = shellInvocation(process.env.SHELL ?? '/bin/zsh', options.command, options.script)
+  const { file, args } = shellInvocation(userShell(), options.command, options.script)
   const pty = spawn(file, args, {
     name: 'xterm-256color',
     cols: options.cols,

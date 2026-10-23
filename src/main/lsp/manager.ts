@@ -8,7 +8,7 @@ import type { LanguageServerId } from '@shared/languageServers'
 import { emit, handle, onSend } from '../ipc'
 import { assertInsideProject } from '../project'
 import { encodeMessage, MessageReader } from './framing'
-import { serverCommand } from './servers'
+import { serverCommand, serverLocation } from './servers'
 
 interface Session {
   id: string
@@ -65,6 +65,11 @@ export function stopAllLanguageServers(): void {
 }
 
 export function registerLspHandlers(owner: () => WebContents | null): void {
+  handle('lsp:locations', () => ({
+    typescript: serverLocation('typescript', appDir(), process.env),
+    java: serverLocation('java', appDir(), process.env),
+    kotlin: serverLocation('kotlin', appDir(), process.env),
+  }))
   handle('lsp:start', (server, root) => {
     try {
       return start(server, assertInsideProject(root), owner)

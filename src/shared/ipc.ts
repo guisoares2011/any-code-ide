@@ -1,7 +1,9 @@
 import type { AtMention, BridgeStatus, EditorSelection, McpToolResult } from './bridge'
-import type { GitCommandResult, GitStatus } from './git'
+import type { FixResult, LintResult } from './eslint'
+import type { GitCommandResult, GitCommit, GitCommitDetails, GitLogQuery, GitStatus } from './git'
 import type { LanguageServerId } from './languageServers'
 import type { MavenDependenciesResult, MavenModule } from './maven'
+import type { Settings } from './settings'
 import type { RunCommand, RunConfigurationSpec } from './runConfigurations'
 
 // IPC contract shared by main, preload and renderer. Every channel is declared here once;
@@ -89,6 +91,20 @@ export interface InvokeChannels {
   /** Commits exactly `paths` (absolute), adding untracked ones first. */
   'git:commit': { args: [root: string, message: string, paths: string[]]; result: GitCommandResult }
   'git:push': { args: [root: string]; result: GitCommandResult }
+  /** Reverts tracked changes of `paths` to HEAD (Rollback); added files leave the index and, with deleteAdded, the disk. */
+  'git:rollback': { args: [root: string, paths: string[], deleteAdded: boolean]; result: GitCommandResult }
+  'git:log': { args: [root: string, query: GitLogQuery]; result: GitCommit[] }
+  'git:commitDetails': { args: [root: string, hash: string]; result: GitCommitDetails | null }
+  /** File contents at a revision (`<hash>`, `<hash>^`, HEAD); null when the file is not there. */
+  'git:show': { args: [root: string, revision: string, path: string]; result: string | null }
+  /** Local and remote branch names. */
+  'git:branches': { args: [root: string]; result: string[] }
+  /** Lints a document's text with the project's ESLint. */
+  'eslint:lint': { args: [root: string, path: string, text: string]; result: LintResult }
+  /** The text with ESLint's fixes applied (Fix ESLint Problems). */
+  'eslint:fix': { args: [root: string, path: string, text: string]; result: FixResult }
+  /** Restarts a project's ESLint (its configuration or installation changed). */
+  'eslint:reset': { args: [root: string]; result: void }
   'pty:create': { args: [options: PtyCreateOptions]; result: string }
   'pty:write': { args: [id: string, data: string]; result: void }
   'pty:resize': { args: [id: string, cols: number, rows: number]; result: void }
@@ -110,6 +126,11 @@ export interface InvokeChannels {
   'bridge:status': { args: []; result: BridgeStatus }
   /** Starts (or reuses) a language server for a project root; null when it cannot run. */
   'lsp:start': { args: [server: LanguageServerId, root: string]; result: string | null }
+  /** Install location of each language server, or null when it is not installed. */
+  'lsp:locations': { args: []; result: Record<LanguageServerId, string | null> }
+  'settings:get': { args: []; result: Settings }
+  /** Saves the settings; returns them as stored (normalized). */
+  'settings:set': { args: [settings: Settings]; result: Settings }
 }
 
 /** Fire-and-forget channels: renderer -> main via ipcRenderer.send. */
@@ -155,6 +176,14 @@ export const INVOKE_CHANNELS = [
   'git:headContent',
   'git:commit',
   'git:push',
+  'git:rollback',
+  'git:log',
+  'git:commitDetails',
+  'git:show',
+  'git:branches',
+  'eslint:lint',
+  'eslint:fix',
+  'eslint:reset',
   'pty:create',
   'pty:write',
   'pty:resize',
@@ -169,6 +198,9 @@ export const INVOKE_CHANNELS = [
   'bridge:toolResult',
   'bridge:status',
   'lsp:start',
+  'lsp:locations',
+  'settings:get',
+  'settings:set',
 ] as const satisfies readonly (keyof InvokeChannels)[]
 
 export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send'] as const satisfies readonly (keyof SendChannels)[]

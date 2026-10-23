@@ -3,7 +3,7 @@
 import type { editor, IRange } from 'monaco-editor'
 import { basename } from '@shared/paths'
 import { createStore } from '../state/store'
-import { setDirty, workbench } from '../state/workbench'
+import { closeTab, setDirty, workbench } from '../state/workbench'
 import { languageForFile, setupMonaco } from './monacoSetup'
 
 export type DocumentState =
@@ -97,6 +97,33 @@ export async function reloadChanged(paths: readonly string[]): Promise<void> {
     }
     if (content.kind !== 'text' || content.content === model.getValue()) continue
     model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content.content }], () => null)
+    entry.savedVersion = model.getAlternativeVersionId()
+    setDirty(path, false)
+  }
+}
+
+/**
+ * Puts documents back to what is on disk after a rollback, discarding unsaved edits like
+ * IntelliJ does; tabs of files that no longer exist close.
+ */
+export async function revertDocuments(paths: readonly string[]): Promise<void> {
+  for (const path of paths) {
+    const entry = loaded.get(path)
+    if (entry?.state.kind !== 'text') continue
+    const { model } = entry.state
+    let content
+    try {
+      content = await window.anycode.invoke('fs:readFile', path)
+    } catch {
+      setDirty(path, false)
+      closeTab(path)
+      await releaseDocument(path)
+      continue
+    }
+    if (content.kind !== 'text') continue
+    if (content.content !== model.getValue()) {
+      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content.content }], () => null)
+    }
     entry.savedVersion = model.getAlternativeVersionId()
     setDirty(path, false)
   }

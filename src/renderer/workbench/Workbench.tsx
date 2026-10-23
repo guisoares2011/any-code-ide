@@ -2,6 +2,8 @@ import { EditorArea } from '../editor/EditorArea'
 import { useActions } from '../keymap/service'
 import { PopupHost } from '../popups/SearchPopup'
 import { RunConfigurationsDialog } from '../run/RunConfigurationsDialog'
+import { SettingsDialog } from '../settings/SettingsDialog'
+import { VcsActions } from '../vcs/VcsActions'
 import { useStore } from '../state/store'
 import { setPanelSize, workbench } from '../state/workbench'
 import { MainToolbar } from './MainToolbar'
@@ -71,6 +73,8 @@ export function Workbench() {
       <StatusBar />
       <PopupHost />
       <RunConfigurationsDialog />
+      <VcsActions />
+      <SettingsDialog />
     </div>
   )
 }

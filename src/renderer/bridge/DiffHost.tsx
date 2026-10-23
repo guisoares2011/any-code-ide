@@ -7,6 +7,7 @@ import { useStore } from '../state/store'
 import { workbench } from '../state/workbench'
 import { clearCurrentSelection } from './selection'
 import { acceptDiff, pendingDiffByKey, rejectDiff, type PendingDiff } from './diffs'
+import { editorFont } from '../state/settings'
 
 let counter = 0
 
@@ -37,8 +38,7 @@ function DiffView({ diff }: { diff: PendingDiff }) {
       originalEditable: false,
       renderSideBySide: true,
       fontFamily: 'JetBrains Mono',
-      fontSize: 13,
-      lineHeight: 20,
+      ...editorFont(),
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
     })

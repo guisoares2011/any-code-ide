@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
 
 export interface Fixture {
   app: ElectronApplication
@@ -10,6 +10,8 @@ export interface Fixture {
   project: string
   /** CLAUDE_CONFIG_DIR of the app under test; the bridge writes its lock file in <dir>/ide. */
   claudeConfigDir: string
+  /** ANYCODE_USER_DATA of the app under test (settings.json, recent projects…). */
+  userData: string
   close(): Promise<void>
 }
 
@@ -49,6 +51,14 @@ function gitInit(root: string): void {
   sh('commit', '-q', '-m', 'initial')
 }
 
+/** Opens a file with Go to File (⇧⌘O), waiting for the file index so Enter picks the file. */
+export async function gotoFile(page: Page, name: string): Promise<void> {
+  await page.keyboard.press('Meta+Shift+KeyO')
+  await page.keyboard.type(name)
+  await expect(page.getByRole('dialog', { name: 'Files' }).getByRole('option').first()).toContainText(name)
+  await page.keyboard.press('Enter')
+}
+
 /** Launches the built app hidden (ANYCODE_HEADLESS=1) on a temporary project. */
 export async function launch(options: LaunchOptions = {}): Promise<Fixture> {
   const project = await createProject()
@@ -67,6 +77,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Fixture> {
     page,
     project,
     claudeConfigDir,
+    userData,
     async close() {
       await app.close()
       await rm(project, { recursive: true, force: true })

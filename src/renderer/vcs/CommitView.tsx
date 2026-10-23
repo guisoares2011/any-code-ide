@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GitFileStatus } from '@shared/git'
 import { basename, dirname } from '@shared/paths'
-import { useActions } from '../keymap/service'
+import { shortcutFor, useActions } from '../keymap/service'
 import { commitFiles, gitState, refreshGit } from '../state/git'
 import { useStore } from '../state/store'
 import { openVcsDiffTab, workbench } from '../state/workbench'
 import { Icon } from '../ui/Icon'
 import { fileIconName } from '../ui/icons'
 import { useListNavigation } from '../ui/useListNavigation'
+import { changesSelection, openRollback } from './rollback'
 
 type Row = { kind: 'group'; title: string; files: GitFileStatus[] } | { kind: 'file'; file: GitFileStatus }
 
@@ -15,6 +16,32 @@ type Row = { kind: 'group'; title: string; files: GitFileStatus[] } | { kind: 'f
  * IntelliJ's Commit tool window: tracked changes and unversioned files with checkboxes (tracked
  * ones included by default), a message and Commit / Commit and Push.
  */
+/** Commit tool window toolbar: Refresh and Rollback. */
+export function CommitHeaderActions() {
+  const status = useStore(gitState, (s) => s.status)
+  return (
+    <>
+      <button className="icon-button" title="Refresh" aria-label="Refresh" onClick={() => void refreshGit()}>
+        <Icon name="general/refresh" />
+      </button>
+      <button
+        className="icon-button"
+        title={`Rollback…${shortcutLabel('ChangesView.Revert')}`}
+        aria-label="Rollback…"
+        disabled={!status.files.some((f) => f.kind !== 'untracked')}
+        onClick={() => openRollback()}
+      >
+        <Icon name="vcs/revert" />
+      </button>
+    </>
+  )
+}
+
+const shortcutLabel = (id: string): string => {
+  const shortcut = shortcutFor(id)
+  return shortcut ? ` (${shortcut})` : ''
+}
+
 export function CommitView({ visible }: { visible: boolean }) {
   const status = useStore(gitState, (s) => s.status)
   const focus = useStore(workbench, (s) => s.focus)
@@ -71,6 +98,12 @@ export function CommitView({ visible }: { visible: boolean }) {
     setBusy(false)
     if (ok) setMessage('')
   }
+
+  // The selected change (or group) is what Rollback starts with.
+  const selectedRow = rows[selected]
+  useEffect(() => {
+    changesSelection.set({ paths: !selectedRow ? [] : selectedRow.kind === 'group' ? selectedRow.files.map((f) => f.path) : [selectedRow.file.path] })
+  }, [selectedRow])
 
   const showDiff = (row: Row | undefined): void => {
     if (row?.kind === 'file' && row.file.kind !== 'untracked') openVcsDiffTab(row.file.path)

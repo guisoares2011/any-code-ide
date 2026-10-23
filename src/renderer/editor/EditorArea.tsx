@@ -15,6 +15,7 @@ import { fileIconName } from '../ui/icons'
 import { applyPendingReveal, openDocument, releaseDocument, revealRequests, type DocumentState } from './documents'
 import { editorActions, sendSelectionToClaude } from './editorActions'
 import { setupMonaco, THEME_NAME } from './monacoSetup'
+import { editorFont, settingsState } from '../state/settings'
 
 /** Closing a Claude diff tab rejects the proposal; closing a file tab releases its document. */
 export function closeEditorTab(tab: EditorTab): void {
@@ -67,7 +68,7 @@ export function EditorArea() {
         {active?.kind === 'diff' ? (
           <DiffHost tabKey={active.path} />
         ) : active?.kind === 'vcs-diff' ? (
-          <VcsDiffHost key={active.path} path={active.filePath!} />
+          <VcsDiffHost key={active.path} path={active.filePath!} revision={active.revision} originalPath={active.originalPath} />
         ) : active ? (
           <FileEditor path={active.path} />
         ) : (
@@ -85,7 +86,8 @@ export function EditorArea() {
  */
 function FileEditor({ path }: { path: string }) {
   const markdown = isMarkdownFile(path)
-  const layout = useStore(markdownLayouts, (s) => layoutOf(path, s.byPath))
+  const defaultLayout = useStore(settingsState, (s) => s.settings.markdown.defaultLayout)
+  const layout = useStore(markdownLayouts, (s) => layoutOf(path, s.byPath, defaultLayout))
   const effective = markdown ? layout : 'editor'
 
   useActions(
@@ -184,8 +186,7 @@ function MonacoHost({ path }: { path: string }) {
       model: null,
       automaticLayout: true,
       fontFamily: 'JetBrains Mono',
-      fontSize: 13,
-      lineHeight: 20,
+      ...editorFont(),
       fontLigatures: false,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,

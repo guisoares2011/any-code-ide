@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { MavenModule } from '@shared/maven'
-import { emptyConfiguration, type RunConfigurationSpec } from '@shared/runConfigurations'
+import { emptyConfiguration, type JUnitConfiguration, type RunConfigurationSpec } from '@shared/runConfigurations'
 import { readReactor } from '../maven/pom'
 import { runCommand, type CommandContext } from './command'
 import { detectRunConfigurations } from './detect'
@@ -26,6 +26,7 @@ const context: CommandContext = {
   maven: './mvnw',
   packageManager: 'pnpm',
   gradle: './gradlew',
+  usesGradle: false,
 }
 
 describe('run commands', () => {
@@ -59,6 +60,27 @@ describe('run commands', () => {
     expect(runCommand(shell, context)).toMatchObject({ script: 'echo hi && ls', env: { A: '1' } })
     const gradle = { ...emptyConfiguration('gradle', 'x', 'g'), tasks: 'clean build' } as RunConfigurationSpec
     expect(runCommand(gradle, context).script).toBe('./gradlew clean build')
+  })
+
+  it('runs JUnit tests through Surefire or Gradle, by module, package, class or method', () => {
+    const junit = (patch: Partial<JUnitConfiguration>): RunConfigurationSpec => ({ ...(emptyConfiguration('junit', 'x', 't') as JUnitConfiguration), ...patch })
+    const method = junit({ scope: 'method', module: 'api', className: 'com.acme.ApiTest', methodName: 'greets', vmOptions: '-Xmx1g -ea' })
+    expect(runCommand(method, context)).toEqual({
+      script: "./mvnw -pl api -am test '-Dtest=com.acme.ApiTest#greets' -Dsurefire.failIfNoSpecifiedTests=false '-DargLine=-Xmx1g -ea'",
+      cwd: '/p',
+      env: {},
+    })
+    expect(runCommand(junit({ scope: 'class', className: 'com.acme.ParentTest' }), context).script).toBe(
+      './mvnw test -Dtest=com.acme.ParentTest -Dsurefire.failIfNoSpecifiedTests=false',
+    )
+    expect(runCommand(junit({ scope: 'package', module: 'acme-api', packageName: 'com.acme.web' }), context).script).toBe(
+      "./mvnw -pl api -am test '-Dtest=com/acme/web/**/*' -Dsurefire.failIfNoSpecifiedTests=false",
+    )
+    expect(runCommand(junit({ scope: 'module', module: 'api' }), context).script).toBe('./mvnw -pl api -am test')
+
+    const gradle = { ...context, usesGradle: true }
+    expect(runCommand(method, gradle).script).toBe("./gradlew test --tests com.acme.ApiTest.greets")
+    expect(runCommand(junit({ scope: 'package', packageName: 'com.acme' }), gradle).script).toBe("./gradlew test --tests 'com.acme.*'")
   })
 })
 

@@ -69,14 +69,20 @@ export function readReactor(root: string): MavenModule[] {
 }
 
 /**
- * Module directory owning a main class: the module whose src/main/java (or kotlin) contains the
+ * Module directory owning a class: the module whose src/<sourceSet>/java (or kotlin) contains the
  * class file. Falls back to matching an IntelliJ module name against artifactIds.
  */
-export function moduleOfClass(root: string, reactor: readonly MavenModule[], mainClass: string, intellijModule?: string): string {
-  const path = mainClass.replaceAll('.', '/')
+export function moduleOfClass(
+  root: string,
+  reactor: readonly MavenModule[],
+  className: string,
+  intellijModule?: string,
+  sourceSet: 'main' | 'test' = 'main',
+): string {
+  const path = className.replaceAll('.', '/')
   for (const module of reactor) {
     for (const [lang, ext] of [['java', 'java'], ['kotlin', 'kt']] as const) {
-      if (existsSync(join(root, module.directory, 'src', 'main', lang, `${path}.${ext}`))) return module.directory
+      if (existsSync(join(root, module.directory, 'src', sourceSet, lang, `${path}.${ext}`))) return module.directory
     }
   }
   if (intellijModule) {

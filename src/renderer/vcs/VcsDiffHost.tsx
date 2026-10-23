@@ -4,14 +4,24 @@ import { openDocument } from '../editor/documents'
 import { languageForFile, setupMonaco, THEME_NAME } from '../editor/monacoSetup'
 import { useStore } from '../state/store'
 import { workbench } from '../state/workbench'
+import { editorFont } from '../state/settings'
 
 let counter = 0
 
+interface Props {
+  path: string
+  /** A commit whose change to the file is shown; absent for HEAD ↔ Local. */
+  revision?: string | undefined
+  /** The file's absolute path in the parent commit when the commit renamed it. */
+  originalPath?: string | undefined
+}
+
 /**
  * HEAD (left, read-only) against the working copy (right). The right side is the file's own
- * document, so edits there are edits to the file and SaveAll writes them.
+ * document, so edits there are edits to the file and SaveAll writes them. With a revision, the
+ * commit's parent against the commit, both read-only.
  */
-export function VcsDiffHost({ path }: { path: string }) {
+export function VcsDiffHost({ path, revision, originalPath }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const project = useStore(workbench, (s) => s.project)
   const [error, setError] = useState<string | null>(null)
@@ -29,12 +39,28 @@ export function VcsDiffHost({ path }: { path: string }) {
       originalEditable: false,
       renderSideBySide: true,
       fontFamily: 'JetBrains Mono',
-      fontSize: 13,
-      lineHeight: 20,
+      ...editorFont(),
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
     })
     const owned: { dispose(): void }[] = []
+    const show = async (rev: string, file: string): Promise<string> => (await window.anycode.invoke('git:show', root, rev, file)) ?? ''
+    if (revision) {
+      void (async () => {
+        const [before, after] = await Promise.all([show(`${revision}^`, originalPath ?? path), show(revision, path)])
+        if (disposed) return
+        const original = monaco.editor.createModel(before, language, monaco.Uri.parse(`anycode-head://${id}/parent`))
+        const modified = monaco.editor.createModel(after, language, monaco.Uri.parse(`anycode-head://${id}/commit`))
+        owned.push(original, modified)
+        diffEditor.updateOptions({ readOnly: true })
+        diffEditor.setModel({ original, modified })
+      })()
+      return () => {
+        disposed = true
+        diffEditor.dispose()
+        owned.forEach((m) => m.dispose())
+      }
+    }
     void (async () => {
       const head = (await window.anycode.invoke('git:headContent', root, path)) ?? ''
       const document = await openDocument(path)
@@ -58,13 +84,13 @@ export function VcsDiffHost({ path }: { path: string }) {
       diffEditor.dispose()
       owned.forEach((m) => m.dispose())
     }
-  }, [path])
+  }, [path, revision, originalPath])
 
   return (
     <div className="diff-view">
       <div className="diff-toolbar">
         <span className="diff-title">
-          <strong>{project ? relativePath(project.root, path) : path}</strong> · HEAD ↔ Local
+          <strong>{project ? relativePath(project.root, path) : path}</strong> · {revision ? `${revision.slice(0, 8)}^ ↔ ${revision.slice(0, 8)}` : 'HEAD ↔ Local'}
         </span>
       </div>
       {error ? <div className="empty-state">{error}</div> : <div className="diff-editor" ref={container} />}

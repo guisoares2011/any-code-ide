@@ -36,6 +36,7 @@ const FILES = [
   // VCS actions declare their shortcuts here (CheckinProject ⌘K, Vcs.Push ⇧⌘K...)
   'platform/vcs-impl/resources/META-INF/VcsActions.xml',
   'platform/dvcs-impl/resources/intellij.platform.vcs.dvcs.impl.xml',
+  'platform/vcs-log/impl/resources/intellij.platform.vcs.log.impl.xml', // Log tab actions (Vcs.Log.FocusTextFilter ⌘L)
   'plugins/terminal/resources/icons/expui/toolwindow/terminal@20x20.svg',
   'plugins/terminal/resources/icons/expui/toolwindow/terminal@20x20_dark.svg',
   // Maven tool window (plugins/maven, Apache-2.0)
@@ -84,6 +85,12 @@ const FILES = [
     'vcs/diff',
     'vcs/push',
     'vcs/update',
+    'vcs/revert', // Rollback (AllIcons.Actions.Rollback)
+    'general/history',
+    'general/filter',
+    'general/user',
+    'gutter/run',
+    'runConfigurations/junit',
     'nodes/folder',
     'nodes/library',
     'general/edit',

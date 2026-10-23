@@ -1,0 +1,55 @@
+# Packaging for macOS (npm run package). Main-process runtime dependencies come from
+# "dependencies" in package.json; the renderer is fully bundled by Vite into out/.
+appId: dev.anycode.app
+productName: AnyCode
+copyright: Copyright © 2026 AnyCode contributors
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - '!out/screenshots/**'
+  - '!out/e2e-results/**'
+  - '!out/tsbuildinfo/**'
+  # typescript-go ships as an extra resource instead (see below).
+  - '!node_modules/@typescript/**'
+# Executables and native modules must live outside app.asar to be spawned or loaded.
+asarUnpack:
+  - node_modules/@lydell/**
+extraResources:
+  # The tsgo binary with its lib.*.d.ts beside it (it finds them next to the executable);
+  # copied whole because electron-builder drops *.d.ts files from node_modules.
+  - from: node_modules/@typescript/typescript-darwin-arm64/lib
+    to: typescript-go
+  - from: node_modules/@typescript/typescript-darwin-arm64/LICENSE
+    to: typescript-go/LICENSE
+  - from: node_modules/@typescript/typescript-darwin-arm64/NOTICE.txt
+    to: typescript-go/NOTICE.txt
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: resources/intellij-community/LICENSE.txt
+    to: licenses/intellij-community/LICENSE.txt
+  - from: resources/intellij-community/NOTICE.txt
+    to: licenses/intellij-community/NOTICE.txt
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  # Ad-hoc signature until a "Developer ID Application" certificate is available; then remove
+  # this line (electron-builder finds the identity in the Keychain), set hardenedRuntime: true and
+  # configure notarization (see docs/roadmap-pendencias.md).
+  identity: '-'
+  hardenedRuntime: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSDesktopFolderUsageDescription: AnyCode opens the projects you choose.
+    NSDocumentsFolderUsageDescription: AnyCode opens the projects you choose.
+    NSDownloadsFolderUsageDescription: AnyCode opens the projects you choose.
+dmg:
+  title: AnyCode ${version}

@@ -12,7 +12,7 @@ Files shipped unmodified under `resources/intellij-community/`, keeping their re
 
 - keymaps `$default.xml` and `Mac OS X 10.5+.xml`
 - `ActionsBundle.properties` and `TerminalBundle.properties` (action names)
-- terminal plugin descriptors (`plugin.xml`, `terminal.xml`, `intellij.terminal.frontend.xml`) and VCS action descriptors (`VcsActions.xml`, `intellij.platform.vcs.dvcs.impl.xml`), read for their keymap entries
+- terminal plugin descriptors (`plugin.xml`, `terminal.xml`, `intellij.terminal.frontend.xml`) and VCS action descriptors (`VcsActions.xml`, `intellij.platform.vcs.dvcs.impl.xml`, `intellij.platform.vcs.log.impl.xml`), read for their keymap entries
 - themes `ManyIslandsDark.theme.json`, `expUI_dark.theme.json`, `darcula.theme.json` and the editor color schemes `IslandSchemeDark.xml`, `expUI_darkScheme.xml`, `DefaultColorSchemesManager.xml`
 - New UI (expui) SVG icons
 
@@ -43,3 +43,5 @@ AnyCode is not affiliated with or endorsed by JetBrains. It does not use JetBrai
 | electron | MIT |
 | markdown-it | MIT |
 | dompurify | MPL-2.0 OR Apache-2.0 (used under Apache-2.0) |
+| ws | MIT |
+| typescript-go (`@typescript/typescript-darwin-arm64`, bundled as `Resources/typescript-go`) | Apache-2.0 (its LICENSE and NOTICE.txt ship beside the binary) |

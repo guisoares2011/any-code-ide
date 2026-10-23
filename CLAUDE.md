@@ -14,9 +14,10 @@ IDE leve, inspirada no IntelliJ IDEA / WebStorm, para abrir **todos os projetos*
 
 - **Electron + TypeScript (strict) + React + Vite** (electron-vite). Escolhido em vez de Tauri porque não há toolchain Rust na máquina, e `node-pty`, Monaco, LSP clients e o Claude Agent SDK são nativos em TS.
 - **Editor:** Monaco. **Terminal:** xterm.js + node-pty.
-- **Linguagens via LSP** (processos gerenciados pelo main): **typescript-go** (TypeScript 7 nativo, `tsc --lsp --stdio`, instalado como `typescript-native`) para JS/TS, no lugar de vtsls/typescript-language-server por ser nativo e leve (~115 MB neste projeto); `jdtls` para Java; `kotlin-lsp` (open source da JetBrains) para Kotlin. ESLint fica para depois.
+- **Linguagens via LSP** (processos gerenciados pelo main): **typescript-go** (TypeScript 7 nativo, `tsc --lsp --stdio`, instalado como `typescript-native`) para JS/TS, no lugar de vtsls/typescript-language-server por ser nativo e leve (~115 MB neste projeto); `jdtls` para Java; `kotlin-lsp` (open source da JetBrains) para Kotlin.
 - **Servidores Java/Kotlin:** o jdtls roda com o Java 21+ do sistema (`JAVA_HOME` → `/usr/libexec/java_home -v 21+` → `java`), com um diretório `-data` por projeto em `~/Library/Application Support/AnyCode/jdtls-workspaces/`. O kotlin-lsp roda via `bin/intellij-server --stdio`, com `--system-path` por projeto (`kotlin-system/`) e `--data-sharing=none` (sem telemetria). A licença dele é concedida automaticamente para Kotlin; não aceitar EULA em nome do usuário. Os servidores mandam avisos (`window/showMessage`) para a tool window Notifications.
 - Ao testar LSP com diretórios temporários, use `realpath`: `/var/folders` é symlink para `/private/var/folders`, e o jdtls não reconhece arquivos abertos pelo caminho com symlink.
+- **ESLint** (`src/main/eslint/`, `src/renderer/lint/eslint.ts`), como o modo automático do IntelliJ: usa o ESLint **do próprio projeto** (`node_modules/eslint`, flat config ou eslintrc via `loadESLint`), num processo separado por raiz (`out/main/eslintWorker.js`, o próprio Electron com `ELECTRON_RUN_AS_NODE=1`), porque a config do projeto é código e não pode carregar no main. Lint ao abrir e ao editar (500 ms) arquivos JS/TS; os problemas viram markers `eslint` ("ESLint: mensagem (regra)"), que aparecem em Problems e no `getDiagnostics` do bridge. Sem ESLint ou sem config, fica em silêncio; mudar `eslint.config.*`, `.eslintrc*` ou `package.json` reinicia o worker. "Fix ESLint Problems" (`AnyCode.ESLintFix`, no Find Action e sem atalho, porque a ação do IntelliJ é de plugin proprietário) aplica os fixes como uma edição desfazível.
 - **Cliente LSP:** o `monaco.lsp.MonacoLspClient` que vem com o Monaco 0.57, por trás de `src/renderer/lsp/router.ts`. O roteador filtra documentos por servidor, responde localmente o que não é dele, injeta `rootUri`, completa os `client/registerCapability` sem `registerOptions` (o jdtls manda assim e o cliente do Monaco quebrava), responde `workspace/configuration` e corrige a URI em minúsculas que o cliente envia em `didOpen`/`didChange`/`didClose` (bug do 0.57). Respostas de localização carregam os arquivos de destino como models antes de chegar ao Monaco, e o `registerEditorOpener` abre a aba. O mesmo roteador serve requests próprios do AnyCode (`documentSymbol` → tool window Structure). O servidor de cada linguagem sobe sob demanda, quando o primeiro arquivo dela é aberto.
 - **Git:** CLI `git` via processo filho.
 - **Testes:** Vitest (unit) e Playwright `_electron` (E2E).
@@ -35,7 +36,7 @@ Estado (2026-10-23): camadas 1 e 2 implementadas (`src/main/bridge/`, `src/rende
 
 Executar e parar o projeto sem sair da IDE. Não é um debugger.
 
-- **Tipos** (`src/shared/runConfigurations.ts`), espelhando o IntelliJ: Spring Boot (main class, módulo, perfis, VM options, argumentos), Maven (linha de comando e perfis), npm, Shell Script e Gradle. Todos têm variáveis de ambiente (campo `KEY=value;…`, como o IntelliJ) e diretório de trabalho.
+- **Tipos** (`src/shared/runConfigurations.ts`), espelhando o IntelliJ: Spring Boot (main class, módulo, perfis, VM options, argumentos), Maven (linha de comando e perfis), npm, Shell Script, Gradle e JUnit. Todos têm variáveis de ambiente (campo `KEY=value;…`, como o IntelliJ) e diretório de trabalho.
 - **Origens**, com precedência por nome nesta ordem:
   1. `.run/<nome>.run.xml` (arquivo de projeto, **formato do IntelliJ**, que lê o mesmo arquivo);
   2. privadas do AnyCode (`<userData>/run-configurations/<sha1(root)>.json`);
@@ -52,8 +53,14 @@ Executar e parar o projeto sem sair da IDE. Não é um debugger.
   - reator lido dos `pom.xml`, com Lifecycle (duplo clique roda `<artifactId> [<fase>]`), Profiles, Plugins e Dependencies;
   - as dependências vêm de `org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree`, com versão fixada porque o 3.9.4 usa por padrão a 3.6.0;
   - "Reload All Maven Projects" (`Maven.Reimport`).
-- **Atalhos:** `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R (no Run), `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4.
-- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura e profiler; JUnit (as do usuário são quase todas temporárias); Docker.
+- **JUnit** (escopo módulo / pacote / classe / método), sempre pelo build, como o "delegate to build tool" do IntelliJ:
+  - Maven: `mvn [-pl <módulo> -am] test -Dtest=<Classe>[#<método>] -Dsurefire.failIfNoSpecifiedTests=false [-DargLine=<VM options>]`; pacote vira `-Dtest=com/acme/**/*`. Validado offline com Maven 3.9.4 + Surefire 3.5.4 num projeto lib + app.
+  - Gradle (projeto com `gradlew`/`build.gradle`/`settings.gradle` e sem `pom.xml`): `./gradlew [:<módulo>:]test --tests <filtro>`; VM options não se aplicam.
+  - No editor, `.java`/`.kt` com `@Test` (também `@ParameterizedTest`, `@RepeatedTest`…) ganham o CodeLens "▶ Run '<classe>'" / "▶ Run '<método>()'" (`run/testDetection.ts` lê o texto, sem compilador). `RunClass` ⌃⇧R roda o método na linha do cursor, ou a classe. O módulo vem do caminho (`<módulo>/src/test/…`).
+  - Cada execução vira uma configuração **temporária** (até 5 por projeto), selecionada no run widget para o Rerun, como no IntelliJ.
+  - Import/export no formato `JUnit` do IntelliJ (`TEST_OBJECT` class/method/package; pacote vazio = módulo inteiro). Padrões, tags e diretórios ficam de fora. O import de Gradle agora inclui os `scriptParameters` (`--tests …`).
+- **Atalhos:** `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R (no Run), `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4, `RunClass` ⌃⇧R.
+- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura e profiler; árvore de resultados de teste (a saída é a do build, no Run); Docker.
 
 ## Markdown
 
@@ -68,6 +75,21 @@ Preview renderizado de `.md` com blocos de shell executáveis (`src/renderer/mar
   - têm ▶ Run no preview e o CodeLens "▶ Run in Terminal" no editor;
   - os dois rodam o mesmo comando (`findShellFences`) numa **nova aba do terminal**, com `cwd` = pasta do arquivo;
   - como o `trimPrompt` do IntelliJ: se alguma linha começa com `$`, só essas rodam (o resto é saída), sem o prompt nem o `# comentário` final.
+
+## Empacotamento
+
+- `electron-builder.yml`: `AnyCode.app` arm64, ícone próprio (`build/icon.svg`: chaves com um prompt, sem marcas da JetBrains), `THIRD_PARTY_NOTICES.md` e as licenças do intellij-community em `Resources/`.
+- Só as dependências do **main** ficam em `dependencies` (`@lydell/node-pty`, `fast-xml-parser`, `typescript-native`, `ws`), porque o electron-builder empacota só elas. Tudo que o renderer usa é embutido pelo Vite e fica em `devDependencies`. Dependência nova usada no main vai em `dependencies`.
+- O node-pty fica fora do asar (`asarUnpack`). O typescript-go vai inteiro para `Resources/typescript-go/` (binário + `lib.*.d.ts`, que o electron-builder removeria de `node_modules`), e `typescriptGoBinary()` usa essa cópia quando ela existe. O worker do ESLint roda de dentro do asar.
+- **Assinatura:** hoje ad-hoc (`identity: '-'`), porque não há certificado "Developer ID Application" no Keychain. Roda nesta máquina, mas o Gatekeeper bloqueia em outra. Para distribuir: instalar o certificado, remover `identity`, ligar `hardenedRuntime` (as entitlements já estão em `build/entitlements.mac.plist`) e configurar a notarização com um perfil do `notarytool`. Pedir as credenciais ao usuário; nunca colocá-las no repositório.
+
+## Settings
+
+Diálogo `ShowSettings` (⌘,, também no ícone de engrenagem), com busca, árvore de páginas, Apply/OK/Cancel. Gravado em `<userData>/settings.json` (`src/shared/settings.ts` normaliza valores e limita os números; `src/main/settings.ts` guarda).
+- **Editor › Font:** tamanho e altura de linha (editores e diffs, aplicados ao vivo).
+- **Tools › Terminal:** shell (vazio = `$SHELL`; vale para terminais e run configurations), comando do agente (padrão `claude`; `ANYCODE_AGENT_COMMAND` tem precedência e o modo headless abre shell) e tamanho da fonte.
+- **Languages & Frameworks:** status dos servidores de linguagem com o comando de instalação; ESLint ligado/desligado ("Automatic ESLint configuration"); layout padrão do Markdown.
+- **Keymap:** somente leitura, com busca por nome, action ID ou atalho (`⌘K`, `meta K`). Editar keymap fica para depois.
 
 ## Engenharia reversa com REA
 
@@ -117,6 +139,7 @@ src/renderer/     UI React
   editor/         Monaco + integração LSP
   terminal/       xterm.js
 src/shared/       tipos e contratos de IPC compartilhados entre main e renderer
+build/            ícone e entitlements do empacotamento
 resources/intellij-community/  dados Apache-2.0 do intellij-community (tag fixo, com manifest.json)
 reference/        material extraído das IDEs (não versionado)
 e2e/              testes Playwright `_electron`
@@ -136,6 +159,9 @@ Mapa do que existe hoje no renderer:
 - `npm run screenshot`: build + captura headless em `out/screenshots/main.png`. O app sai sozinho; prazo máximo de 60 s.
 - `npm run build` (saída em `out/`). `npm run dev` abre janela: **só quando o usuário pedir**.
 - `node scripts/install-language-servers.mjs [jdtls] [kotlin]`: baixa os servidores de Java (jdtls, ~50 MB) e Kotlin (kotlin-lsp, ~360 MB, 1,1 GB descompactado) para `~/Library/Application Support/AnyCode/language-servers/`, com verificação de SHA-256. O TypeScript não precisa de download. Os E2E de Java/Kotlin são pulados se o servidor não estiver instalado.
+- `npm run package` (`.dmg` + `.zip` arm64 em `dist/`) / `npm run package:dir` (só o `AnyCode.app`, mais rápido). Usam o electron-builder (`electron-builder.yml`); nenhuma janela abre.
+- `npm run test:packaged`: smoke test headless do `dist/mac-arm64/AnyCode.app` (terminal, typescript-go, ESLint, Git). Rode depois do `package:dir`.
+- `npx electron scripts/make-icon.mjs`: renderiza `build/icon.svg` em `build/icon.icns` (offscreen, sem janela).
 - `npm run fetch:intellij`: baixa de novo os recursos do intellij-community no tag fixado em `scripts/fetch-intellij-community.mjs`. Rode depois de mudar `TAG` ou `FILES` e confira o `manifest.json`.
 
 Variáveis de ambiente do app:
@@ -165,10 +191,13 @@ Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 
 2. ✅ Engine de keymap lendo os XMLs do IntelliJ
 3. ✅ Terminal embutido com `claude` por projeto
 4. ✅ Bridge IDE ↔ Claude Code (diffs, seleção, diagnostics)
-5. ✅ LSP de JS/TS (diagnostics → Problems e `getDiagnostics` do bridge, ⌘B, hover, completion, Structure)
+5. ✅ LSP de JS/TS (diagnostics → Problems e `getDiagnostics` do bridge, ⌘B, hover, completion, Structure) e ESLint do projeto
 6. ✅ LSP de Java/Kotlin. O jdtls traz erros e ⌘B, mesmo sem build tool. O kotlin-lsp só analisa projetos Gradle/Maven; sem eles, Structure funciona e o aviso aparece em Notifications.
-7. ✅ Run/Stop e run configurations editáveis (Spring Boot, Maven, npm, Shell, Gradle), compatíveis com `.run/*.run.xml` do IntelliJ e importando o `workspace.xml`; tool window Maven com árvore de dependências.
-8. ✅ Painel Git: tool window Commit com checkboxes, diff HEAD ↔ Local, commit parcial com `git commit --only`, Commit and Push (define o upstream no primeiro push), cores `FILESTATUS_*` na árvore e nas abas, e atualização quando o agente commita (o watcher deixa passar `.git/index`, `HEAD` e `refs/heads`). Atalhos: `CheckinProject` ⌘K, `Vcs.Push` ⇧⌘K, `Diff.ShowDiff` ⌘D, ⌘⏎ (`Commit.Execute`). Falta o Rollback e o log (tool window Version Control).
+7. ✅ Run/Stop e run configurations editáveis (Spring Boot, Maven, npm, Shell, Gradle, JUnit), compatíveis com `.run/*.run.xml` do IntelliJ e importando o `workspace.xml`; tool window Maven com árvore de dependências.
+8. ✅ Painel Git: tool window Commit com checkboxes, diff HEAD ↔ Local, commit parcial com `git commit --only`, Commit and Push (define o upstream no primeiro push), cores `FILESTATUS_*` na árvore e nas abas, e atualização quando o agente commita (o watcher deixa passar `.git/index`, `HEAD` e `refs/heads`). Atalhos: `CheckinProject` ⌘K, `Vcs.Push` ⇧⌘K, `Diff.ShowDiff` ⌘D, ⌘⏎ (`Commit.Execute`).
+   - **Rollback** (`ChangesView.Revert` ⌥⌘Z, também na toolbar do Commit): diálogo "Rollback Changes" com os arquivos do contexto (seleção no Commit, arquivo do editor ou todos). Modificados e deletados voltam ao HEAD (`git restore --source=HEAD --staged --worktree`); adicionados saem do índice e, com "Delete local copies of the added files", do disco; renomeações são desfeitas. Edições não salvas desses arquivos são descartadas, como no IntelliJ.
+   - **Log** (tool window Version Control, título "Git", ⌘9): commits em `--date-order` de todos os refs, paginados de 300 em 300, com labels de branch/tag e filtros de texto ou hash (`Vcs.Log.FocusTextFilter` ⌘L), branch e usuário. À direita, os arquivos do commit (duplo clique, Enter ou ⌘D abrem o diff `<hash>^` ↔ `<hash>`, somente leitura) e a mensagem. `Vcs.CopyRevisionNumberAction` ⌥⇧⌘C copia o hash. `Vcs.ShowTabbedFileHistory` ("Show History") filtra pelo arquivo ativo. Falta o grafo de branches.
+   - A árvore do projeto esconde a lista padrão "Ignored files and folders" do IntelliJ (`.git`, `.DS_Store`, `__pycache__`…).
 9. ✅ Multi-projeto: uma janela, vários projetos, cada um com as próprias abas, tool windows, terminais (com o seu `claude`), execuções e LSPs. O widget de projeto abre o popup Projects, que lista os abertos, os recentes (AnyCode + `recentProjects.xml` de todas as IDEs JetBrains instaladas), "Open…" e aceita um caminho digitado. Atalhos: `NextProjectWindow` ⌥⌘\`, `PreviousProjectWindow` ⇧⌥⌘\`, `CloseProject`, `$LRU`, `OpenFile`. O lockfile do bridge lista todas as raízes abertas. Na próxima abertura, reabre os projetos da sessão anterior; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
 
-Pendências conhecidas: Rollback e log no Git; JUnit nas run configurations; ESLint no TS; tela de Settings; empacotamento como `.app` assinado.
+Pendências conhecidas: assinatura com Developer ID e notarização (depende do certificado do usuário); grafo de branches no Log; edição de keymap. Plano detalhado e estado de cada uma em `docs/roadmap-pendencias.md`.

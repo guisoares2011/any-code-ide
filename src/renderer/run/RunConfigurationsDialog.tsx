@@ -6,6 +6,7 @@ import {
   parseEnv,
   RUN_CONFIGURATION_TYPES,
   type RunConfigurationSpec,
+  type JUnitScope,
   type RunConfigurationType,
 } from '@shared/runConfigurations'
 import { useActions } from '../keymap/service'
@@ -305,7 +306,42 @@ function Form({ draft, modules, nameRef, onChange }: FormProps) {
         </Field>
       )}
       {spec.type === 'gradle' && text('Tasks', spec.tasks, (v) => ({ tasks: v }), 'clean build')}
-      {spec.type !== 'spring-boot' && text('Working directory', spec.workingDirectory, (v) => ({ workingDirectory: v }), '(project root)')}
+      {spec.type === 'junit' && (
+        <>
+          <Field label="Test kind">
+            <select className="text-field" value={spec.scope} onChange={(e) => onChange({ scope: e.target.value as JUnitScope })}>
+              <option value="module">All in module</option>
+              <option value="package">All in package</option>
+              <option value="class">Class</option>
+              <option value="method">Method</option>
+            </select>
+          </Field>
+          <Field label="Module">
+            <input
+              className="text-field"
+              list="junit-modules"
+              value={spec.module}
+              placeholder="(project root)"
+              spellCheck={false}
+              onChange={(e) => onChange({ module: e.target.value })}
+            />
+            <datalist id="junit-modules">
+              {modules
+                .filter((m) => m.directory && m.packaging !== 'pom')
+                .map((m) => (
+                  <option key={m.directory} value={m.directory}>
+                    {m.artifactId}
+                  </option>
+                ))}
+            </datalist>
+          </Field>
+          {spec.scope === 'package' && text('Package', spec.packageName, (v) => ({ packageName: v }), 'com.example')}
+          {(spec.scope === 'class' || spec.scope === 'method') && text('Class', spec.className, (v) => ({ className: v }), 'com.example.AppTest')}
+          {spec.scope === 'method' && text('Method', spec.methodName, (v) => ({ methodName: v }), 'greets')}
+          {text('VM options', spec.vmOptions, (v) => ({ vmOptions: v }), '-ea (Maven only)')}
+        </>
+      )}
+      {spec.type !== 'spring-boot' && spec.type !== 'junit' && text('Working directory', spec.workingDirectory, (v) => ({ workingDirectory: v }), '(project root)')}
       <Field label="Environment variables">
         <EnvField value={spec.env} onChange={(env) => onChange({ env })} />
       </Field>

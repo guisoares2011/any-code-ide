@@ -31,6 +31,20 @@ const WORKSPACE = `<?xml version="1.0" encoding="UTF-8"?>
       <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     </configuration>
     <configuration name="ApiTest" type="JUnit" factoryName="JUnit" temporary="true" />
+    <configuration name="GreetingTest.greets" type="JUnit" factoryName="JUnit">
+      <module name="acme-api" />
+      <option name="PACKAGE_NAME" value="com.acme" />
+      <option name="MAIN_CLASS_NAME" value="com.acme.GreetingTest" />
+      <option name="METHOD_NAME" value="greets" />
+      <option name="TEST_OBJECT" value="method" />
+    </configuration>
+    <configuration name="Tagged" type="JUnit" factoryName="JUnit"><option name="TEST_OBJECT" value="tags" /></configuration>
+    <configuration name="AppTest" type="GradleRunConfiguration" factoryName="Gradle">
+      <ExternalSystemSettings>
+        <option name="scriptParameters" value="--tests &quot;com.acme.AppTest&quot;" />
+        <option name="taskNames"><list><option value=":app:test" /></list></option>
+      </ExternalSystemSettings>
+    </configuration>
     <configuration name="compose" type="docker-deploy" factoryName="docker-compose.yml" />
   </component>
 </project>`
@@ -38,7 +52,9 @@ const WORKSPACE = `<?xml version="1.0" encoding="UTF-8"?>
 describe('IntelliJ run configurations', () => {
   it('imports the types AnyCode runs from workspace.xml, skipping temporary and unsupported ones', () => {
     const specs = parseWorkspaceRunManager(WORKSPACE, '/p')
-    expect(specs.map((s) => `${s.type}:${s.name}`)).toEqual(['spring-boot:Api', 'maven:parent [package]', 'shell:E2E'])
+    expect(specs.map((s) => `${s.type}:${s.name}`)).toEqual(['spring-boot:Api', 'maven:parent [package]', 'shell:E2E', 'junit:GreetingTest.greets', 'gradle:AppTest'])
+    expect(specs[3]).toMatchObject({ scope: 'method', module: 'acme-api', className: 'com.acme.GreetingTest', methodName: 'greets' })
+    expect(specs[4]).toMatchObject({ tasks: ':app:test --tests "com.acme.AppTest"' })
     expect(specs[0]).toMatchObject({
       origin: 'intellij',
       mainClass: 'com.acme.ApiApplication',
@@ -59,6 +75,9 @@ describe('IntelliJ run configurations', () => {
       { ...base, id: 'x', name: 'Dev', type: 'npm', script: 'dev', arguments: '--port 3000' },
       { ...base, id: 'x', name: 'Script', type: 'shell', script: 'echo "<hi> & bye"' },
       { ...base, id: 'x', name: 'Tasks', type: 'gradle', tasks: 'clean build' },
+      { ...base, id: 'x', name: 'One test', type: 'junit', scope: 'method', module: 'api', packageName: 'com.acme', className: 'com.acme.ApiTest', methodName: 'greets', vmOptions: '-ea' },
+      { ...base, id: 'x', name: 'All', type: 'junit', scope: 'module', module: 'api', packageName: '', className: '', methodName: '', vmOptions: '' },
+      { ...base, id: 'x', name: 'Package', type: 'junit', scope: 'package', module: '', packageName: 'com.acme', className: '', methodName: '', vmOptions: '' },
     ]
     for (const spec of specs) {
       const xml = toRunFile(spec)

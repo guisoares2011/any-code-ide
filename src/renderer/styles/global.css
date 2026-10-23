@@ -1220,3 +1220,270 @@ button {
   border-top: 1px solid var(--c-container-editor-border-alt);
   margin: 1.5em 0;
 }
+
+/* ── Rollback ───────────────────────────────────────────────────────────── */
+
+.rollback-dialog {
+  width: min(560px, 92vw);
+  max-height: min(520px, 80vh);
+}
+
+.rollback-list {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  margin: 0 16px;
+  padding: 4px 0;
+  border: 1px solid var(--c-container-dialog-border);
+  border-radius: var(--island-radius);
+}
+
+.rollback-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Version Control: Log ───────────────────────────────────────────────── */
+
+.log-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.log-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 6px;
+}
+
+.log-filters .text-field {
+  height: 26px;
+}
+
+.log-text-filter {
+  width: 220px;
+}
+
+.log-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding: 0 2px 0 8px;
+  border-radius: var(--component-radius);
+  background: var(--c-control-bg-raised);
+  white-space: nowrap;
+}
+
+.log-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.log-commits {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.log-row {
+  gap: 12px;
+}
+
+.log-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-author {
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--c-text-secondary);
+}
+
+.log-date {
+  width: 130px;
+  color: var(--c-text-secondary);
+  text-align: right;
+}
+
+.log-ref {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--ui-VersionControl-RefLabel-foreground, var(--c-text-default));
+  border: 1px solid currentColor;
+}
+
+.log-ref-head {
+  color: var(--ui-VersionControl-GitLog-headIconColor, var(--c-text-default));
+}
+
+.log-ref-branch {
+  color: var(--ui-VersionControl-GitLog-localBranchIconColor, var(--c-text-default));
+}
+
+.log-ref-tag {
+  color: var(--ui-VersionControl-GitLog-tagIconColor, var(--c-text-default));
+}
+
+.log-details {
+  width: 38%;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--c-container-tool-window-border);
+}
+
+.log-files {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.log-message {
+  max-height: 45%;
+  overflow: auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--c-container-tool-window-border);
+  user-select: text;
+}
+
+.log-message pre {
+  margin: 0 0 6px;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+/* ── Settings ───────────────────────────────────────────────────────────── */
+
+.settings-dialog {
+  width: min(960px, 94vw);
+  height: min(640px, 84vh);
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-nav {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-right: 1px solid var(--c-container-dialog-border);
+}
+
+.settings-nav > .text-field {
+  margin: 0 12px;
+}
+
+.settings-nav .tree {
+  flex: 1;
+  overflow: auto;
+}
+
+.settings-group {
+  color: var(--c-text-secondary);
+}
+
+.settings-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 20px;
+  overflow: auto;
+}
+
+.settings-breadcrumb {
+  font-weight: 600;
+}
+
+.settings-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-number {
+  width: 90px;
+}
+
+.settings-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-table-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: center;
+  min-height: var(--row-height);
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+}
+
+.settings-table-row:hover {
+  background: var(--c-selection-bg-hovered);
+}
+
+.settings-table-row .hint,
+.settings-table-row .vcs-conflicted {
+  overflow-wrap: anywhere;
+}
+
+.keymap-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.keymap-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.keymap-filters .text-field {
+  flex: 1;
+}
+
+.keymap-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.keymap-shortcuts kbd {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--c-control-bg-raised);
+  font: inherit;
+  color: var(--c-text-secondary);
+}

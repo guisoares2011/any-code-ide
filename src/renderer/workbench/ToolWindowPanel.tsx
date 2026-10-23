@@ -9,7 +9,8 @@ import { useStore } from '../state/store'
 import { hideToolWindow, workbench, type Anchor, type ToolWindowId, TOOL_WINDOWS } from '../state/workbench'
 import { StructureView } from '../structure/StructureView'
 import { TerminalTabs, TerminalView } from '../terminal/TerminalView'
-import { CommitView } from '../vcs/CommitView'
+import { CommitHeaderActions, CommitView } from '../vcs/CommitView'
+import { LogView } from '../vcs/LogView'
 import { Icon } from '../ui/Icon'
 
 function ToolWindowContent({ id, visible }: { id: ToolWindowId; visible: boolean }): ReactNode {
@@ -31,6 +32,8 @@ function ToolWindowContent({ id, visible }: { id: ToolWindowId; visible: boolean
       return <NotificationsView visible={visible} />
     case 'Maven':
       return <MavenView visible={visible} />
+    case 'Version Control':
+      return <LogView key={root} visible={visible} />
   }
 }
 
@@ -38,6 +41,7 @@ function HeaderExtra({ id }: { id: ToolWindowId }): ReactNode {
   if (id === 'Terminal') return <TerminalTabs />
   if (id === 'Run') return <RunTabs />
   if (id === 'Maven') return <MavenHeaderActions />
+  if (id === 'Commit') return <CommitHeaderActions />
   return null
 }
 

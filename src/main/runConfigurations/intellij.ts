@@ -40,7 +40,7 @@ function envs(node: Node): Record<string, string> {
   return result
 }
 
-/** Converts one <configuration>; null for types AnyCode does not run (JUnit, Docker...). */
+/** Converts one <configuration>; null for types AnyCode does not run (Docker, Application...). */
 export function fromIntellij(node: Node, root: string, origin: RunConfigurationOrigin, id: string): RunConfigurationSpec | null {
   const name = attr(node, 'name')
   const type = attr(node, 'type')
@@ -89,9 +89,29 @@ export function fromIntellij(node: Node, root: string, origin: RunConfigurationO
       return { ...base, type: 'npm', script, arguments: attr(node.arguments as Node | undefined, 'value') }
     }
     case 'GradleRunConfiguration': {
-      const settings = (node.ExternalSystemSettings as Node | undefined) ?? {}
-      const tasks = list((options(settings).get('taskNames')?.list as Node | undefined)?.option).map((o) => attr(o, 'value'))
-      return { ...base, type: 'gradle', tasks: tasks.join(' ') }
+      const settings = options((node.ExternalSystemSettings as Node | undefined) ?? {})
+      const tasks = list((settings.get('taskNames')?.list as Node | undefined)?.option).map((o) => attr(o, 'value'))
+      // Test runs delegated to Gradle keep their filter here ("--tests com.acme.AppTest").
+      const parameters = attr(settings.get('scriptParameters'), 'value')
+      return { ...base, type: 'gradle', tasks: [...tasks, parameters].filter(Boolean).join(' ') }
+    }
+    case 'JUnit': {
+      const testObject = value('TEST_OBJECT') || 'class'
+      // "All in package" with no package is every test of the module.
+      const scope =
+        testObject === 'package' && !value('PACKAGE_NAME') ? 'module' : testObject === 'method' || testObject === 'package' || testObject === 'class' ? testObject : null
+      // Patterns, tags, directories and categories have no build tool equivalent here.
+      if (!scope) return null
+      return {
+        ...base,
+        type: 'junit',
+        scope,
+        module: attr(node.module as Node | undefined, 'name'),
+        packageName: value('PACKAGE_NAME'),
+        className: value('MAIN_CLASS_NAME'),
+        methodName: value('METHOD_NAME'),
+        vmOptions: value('VM_PARAMETERS'),
+      }
     }
     default:
       return null
@@ -202,6 +222,23 @@ function intellijBody(spec: RunConfigurationSpec): { type: string; factoryName?:
               { '@name': 'taskNames', list: { option: spec.tasks.split(/\s+/).filter(Boolean).map((t) => ({ '@value': t })) } },
             ],
           },
+        },
+      }
+    case 'junit':
+      return {
+        type: 'JUnit',
+        factoryName: 'JUnit',
+        body: {
+          ...(spec.module ? { module: { '@name': spec.module } } : {}),
+          option: [
+            option('PACKAGE_NAME', spec.scope === 'package' ? spec.packageName : spec.className.slice(0, Math.max(spec.className.lastIndexOf('.'), 0))),
+            option('MAIN_CLASS_NAME', spec.scope === 'package' || spec.scope === 'module' ? '' : spec.className),
+            option('METHOD_NAME', spec.scope === 'method' ? spec.methodName : ''),
+            // IntelliJ has no "module" kind: all tests of a module are the package kind with no package.
+            option('TEST_OBJECT', spec.scope === 'module' ? 'package' : spec.scope),
+            option('VM_PARAMETERS', spec.vmOptions),
+          ].filter((o) => o['@value'] !== '' || o['@name'] === 'TEST_OBJECT'),
+          ...envBlock,
         },
       }
   }

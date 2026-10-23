@@ -1,8 +1,10 @@
-// Git through the `git` CLI (no shell): branch, status, file contents at HEAD, commit and push.
+// Git through the `git` CLI (no shell): branch, status, file contents at a revision, commit, push,
+// rollback and the log.
 import { execFile } from 'node:child_process'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { GitCommandResult, GitFileStatus, GitStatus } from '@shared/git'
+import type { GitChangedFile, GitCommandResult, GitCommit, GitCommitDetails, GitFileStatus, GitLogQuery, GitStatus } from '@shared/git'
 import { handle } from './ipc'
 import { assertInsideProject } from './project'
 
@@ -73,13 +75,16 @@ export async function gitStatus(root: string): Promise<GitStatus> {
   return { repository: true, branch: await currentBranch(top), files: parsePorcelain(output, top) }
 }
 
-/** File contents at HEAD, or null when the file is not in HEAD (new) or there is no commit yet. */
-export async function headContent(root: string, path: string): Promise<string | null> {
+/** File contents at a revision, or null when the file (or the revision) does not exist. */
+export async function fileAtRevision(root: string, revision: string, path: string): Promise<string | null> {
   const top = await topLevel(root)
-  if (!top) return null
+  if (!top || revision.startsWith('-')) return null
   const relative = path.startsWith(`${top}/`) ? path.slice(top.length + 1) : path
-  return git(top, ['show', `HEAD:${relative}`])
+  return git(top, ['show', `${revision}:${relative}`])
 }
+
+/** File contents at HEAD, or null when the file is not in HEAD (new) or there is no commit yet. */
+export const headContent = (root: string, path: string): Promise<string | null> => fileAtRevision(root, 'HEAD', path)
 
 /**
  * Commits exactly the selected files (IntelliJ's partial commit): new files are added first, then
@@ -109,10 +114,139 @@ export async function push(root: string): Promise<GitCommandResult> {
   return upstream ? gitCommand(root, ['push']) : gitCommand(root, ['push', '--set-upstream', 'origin', 'HEAD'])
 }
 
+/**
+ * Rollback (ChangesView.Revert): tracked changes of `paths` go back to HEAD in the index and the
+ * work tree. Files added since HEAD leave the index and, with deleteAdded, the disk; a rename is
+ * undone by restoring the source and removing the new path. Unversioned files are left alone.
+ */
+export async function rollback(root: string, paths: readonly string[], deleteAdded: boolean): Promise<GitCommandResult> {
+  const top = await topLevel(root)
+  if (!top) return { ok: false, output: 'Not a git repository.' }
+  const selected = new Set(paths)
+  const files = (await gitStatus(top)).files.filter((f) => selected.has(f.path) && f.kind !== 'untracked')
+  if (files.length === 0) return { ok: false, output: 'No changes to roll back.' }
+  const hasHead = (await git(top, ['rev-parse', '--verify', '--quiet', 'HEAD'])) !== null
+  const toRestore: string[] = []
+  const toUnstage: string[] = []
+  const toDelete: string[] = []
+  for (const file of files) {
+    if (file.kind === 'added' || !hasHead) {
+      toUnstage.push(file.relativePath)
+      if (deleteAdded) toDelete.push(file.path)
+    } else if (file.kind === 'renamed' && file.originalPath) {
+      toRestore.push(file.originalPath)
+      toUnstage.push(file.relativePath)
+      toDelete.push(file.path)
+    } else toRestore.push(file.relativePath)
+  }
+  const outputs: string[] = []
+  if (toUnstage.length > 0) {
+    const result = await gitCommand(top, ['rm', '--cached', '--force', '--quiet', '--ignore-unmatch', '--', ...toUnstage])
+    if (!result.ok) return result
+    outputs.push(result.output)
+  }
+  if (toRestore.length > 0) {
+    const result = await gitCommand(top, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...toRestore])
+    if (!result.ok) return result
+    outputs.push(result.output)
+  }
+  await Promise.all(toDelete.map((path) => rm(path, { force: true })))
+  return { ok: true, output: outputs.filter(Boolean).join('\n') }
+}
+
+const FIELD = '\x1f'
+const RECORD = '\x1e'
+const LOG_FORMAT = ['%H', '%P', '%an', '%ae', '%at', '%D', '%s'].join('%x1f') + '%x1e'
+const DEFAULT_LOG_LIMIT = 300
+
+/** Parses `git log` output in LOG_FORMAT. */
+export function parseLog(output: string): GitCommit[] {
+  return output
+    .split(RECORD)
+    .map((record) => record.replace(/^\n/, ''))
+    .filter((record) => record.length > 0)
+    .map((record) => {
+      const [hash = '', parents = '', author = '', email = '', date = '0', refs = '', subject = ''] = record.split(FIELD)
+      return {
+        hash,
+        parents: parents ? parents.split(' ') : [],
+        author,
+        email,
+        date: Number(date) * 1000,
+        refs: refs ? refs.split(', ') : [],
+        subject,
+      }
+    })
+}
+
+/** The log, newest first (date order like IntelliJ's), filtered like the Log tab's filters. */
+export async function log(root: string, query: GitLogQuery): Promise<GitCommit[]> {
+  const top = await topLevel(root)
+  if (!top) return []
+  const limit = Math.min(Math.max(query.limit ?? DEFAULT_LOG_LIMIT, 1), 5000)
+  const args = ['log', '--date-order', `--format=${LOG_FORMAT}`, `--max-count=${limit}`, `--skip=${Math.max(query.skip ?? 0, 0)}`]
+  if (query.author) args.push(`--author=${query.author}`, '--regexp-ignore-case')
+  const text = query.text?.trim()
+  if (text) args.push(`--grep=${text}`, '--fixed-strings', '--regexp-ignore-case')
+  if (query.branch && !query.branch.startsWith('-')) args.push(query.branch)
+  else if (!query.path) args.push('--all')
+  if (query.path) {
+    const relative = query.path.startsWith(`${top}/`) ? query.path.slice(top.length + 1) : query.path
+    args.push('--follow', '--', relative)
+  }
+  const commits = parseLog((await git(top, args)) ?? '')
+  // A hash typed in the text filter finds that commit even when its message does not match.
+  if (text && /^[0-9a-f]{4,40}$/i.test(text) && !query.skip && !commits.some((c) => c.hash.startsWith(text.toLowerCase()))) {
+    const byHash = parseLog((await git(top, ['log', '-1', `--format=${LOG_FORMAT}`, `${text}^{commit}`, '--'])) ?? '')
+    return [...byHash, ...commits]
+  }
+  return commits
+}
+
+/** Parses `git diff-tree -r -M --name-status -z` output. */
+export function parseNameStatus(output: string, top: string): GitChangedFile[] {
+  const fields = output.split('\0')
+  const files: GitChangedFile[] = []
+  for (let i = 0; i < fields.length; i++) {
+    const status = fields[i]!
+    if (!/^[AMDRCT]/.test(status)) continue
+    const code = status[0]!
+    if (code === 'R' || code === 'C') {
+      const originalPath = fields[++i]!
+      const relativePath = fields[++i]!
+      files.push({ path: join(top, relativePath), relativePath, kind: code === 'R' ? 'renamed' : 'added', originalPath })
+    } else {
+      const relativePath = fields[++i]!
+      const kind = code === 'A' ? 'added' : code === 'D' ? 'deleted' : 'modified'
+      files.push({ path: join(top, relativePath), relativePath, kind })
+    }
+  }
+  return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+}
+
+export async function commitDetails(root: string, hash: string): Promise<GitCommitDetails | null> {
+  const top = await topLevel(root)
+  if (!top || !/^[0-9a-f]{4,64}$/i.test(hash)) return null
+  const message = await git(top, ['log', '-1', '--format=%B', hash, '--'])
+  if (message === null) return null
+  const changes = (await git(top, ['diff-tree', '--no-commit-id', '-r', '-M', '--name-status', '-z', '--root', '-m', '--first-parent', hash])) ?? ''
+  return { hash, message: message.trimEnd(), files: parseNameStatus(changes, top) }
+}
+
+export async function branches(root: string): Promise<string[]> {
+  const output = await git(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'])
+  return (output ?? '').split('\n').filter((name) => name && !name.endsWith('/HEAD'))
+}
+
 export function registerGitHandlers(): void {
   handle('git:branch', (root) => currentBranch(assertInsideProject(root)))
   handle('git:status', (root) => gitStatus(assertInsideProject(root)))
   handle('git:headContent', (root, path) => headContent(assertInsideProject(root), assertInsideProject(path)))
   handle('git:commit', (root, message, paths) => commit(assertInsideProject(root), message, paths.map(assertInsideProject)))
   handle('git:push', (root) => push(assertInsideProject(root)))
+  handle('git:rollback', (root, paths, deleteAdded) => rollback(assertInsideProject(root), paths.map(assertInsideProject), deleteAdded))
+  handle('git:log', (root, query) => log(assertInsideProject(root), { ...query, path: query.path && assertInsideProject(query.path) }))
+  handle('git:commitDetails', (root, hash) => commitDetails(assertInsideProject(root), hash))
+  handle('git:show', (root, revision, path) => fileAtRevision(assertInsideProject(root), revision, assertInsideProject(path)))
+  handle('git:branches', (root) => branches(assertInsideProject(root)))
 }

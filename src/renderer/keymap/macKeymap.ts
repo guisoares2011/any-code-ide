@@ -6,6 +6,7 @@ import terminalFrontendXml from '@intellij/plugins/terminal/frontend/resources/i
 import terminalPluginXml from '@intellij/plugins/terminal/resources/META-INF/plugin.xml?raw'
 import dvcsActionsXml from '@intellij/platform/dvcs-impl/resources/intellij.platform.vcs.dvcs.impl.xml?raw'
 import vcsActionsXml from '@intellij/platform/vcs-impl/resources/META-INF/VcsActions.xml?raw'
+import vcsLogXml from '@intellij/platform/vcs-log/impl/resources/intellij.platform.vcs.log.impl.xml?raw'
 import { COMPONENT_SHORTCUTS } from './componentShortcuts'
 import { Keymap, type ActionBinding } from './keymap'
 import { parseKeymapXml, parsePluginShortcuts, type KeymapOperation } from './keymapXml'
@@ -34,7 +35,7 @@ export interface MacKeymapOptions {
 export function loadMacKeymap(options: MacKeymapOptions = {}): Keymap {
   // Platform and plugin descriptors whose actions declare their own keymap entries.
   const plugins = parsePluginShortcuts(terminalPluginXml)
-  for (const xml of [terminalFrontendXml, vcsActionsXml, dvcsActionsXml]) parsePluginShortcuts(xml, plugins)
+  for (const xml of [terminalFrontendXml, vcsActionsXml, dvcsActionsXml, vcsLogXml]) parsePluginShortcuts(xml, plugins)
   for (const xml of options.pluginXmls ?? []) parsePluginShortcuts(xml, plugins)
   const binding: ActionBinding = (id) => options.binding?.(id) ?? plugins.bindings.get(id)
 

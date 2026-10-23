@@ -58,7 +58,7 @@ export function MainToolbar() {
       >
         <Icon name="general/search" />
       </button>
-      <button className="toolbar-icon" title="Settings" disabled>
+      <button className="toolbar-icon" title={`Settings… (${shortcutFor('ShowSettings') ?? ''})`} aria-label="Settings" onClick={() => performAction('ShowSettings')}>
         <Icon name="general/settings" />
       </button>
     </div>

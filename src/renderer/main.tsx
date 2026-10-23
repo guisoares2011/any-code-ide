@@ -11,6 +11,9 @@ import { setupMonaco } from './editor/monacoSetup'
 import { installEditorOpener } from './editor/navigation'
 import { installLanguageServers } from './lsp/client'
 import { installMarkdownSupport } from './markdown/markdownSupport'
+import { installTestSupport } from './run/testSupport'
+import { installEslint } from './lint/eslint'
+import { installSettings } from './settings/applySettings'
 import { installGitStatus } from './state/git'
 import { installKeymapDispatcher } from './keymap/service'
 import { workbench } from './state/workbench'
@@ -19,12 +22,15 @@ import { Workbench } from './workbench/Workbench'
 
 async function main(): Promise<void> {
   applyIslandsDark()
+  await installSettings()
   installKeymapDispatcher()
   installBridgeClient()
   setupMonaco()
   installEditorOpener()
   installLanguageServers()
   installMarkdownSupport()
+  installTestSupport()
+  installEslint()
   const { projects, current } = await window.anycode.invoke('project:initial')
   const project = projects.find((p) => p.root === current) ?? null
   workbench.set({ project, projects })

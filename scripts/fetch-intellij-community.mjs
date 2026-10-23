@@ -38,6 +38,10 @@ const FILES = [
   'platform/dvcs-impl/resources/intellij.platform.vcs.dvcs.impl.xml',
   'plugins/terminal/resources/icons/expui/toolwindow/terminal@20x20.svg',
   'plugins/terminal/resources/icons/expui/toolwindow/terminal@20x20_dark.svg',
+  // Maven tool window (plugins/maven, Apache-2.0)
+  ...['toolwindow/maven@20x20', 'build/mavenProject', 'build/mavenModule', 'build/mavenGoal', 'build/mavenPlugin', 'build/mavenProfiles', 'build/mavenLoadChanges'].flatMap(
+    (name) => [`plugins/maven/src/main/resources/images/expui/${name}.svg`, `plugins/maven/src/main/resources/images/expui/${name}_dark.svg`],
+  ),
   // theme chain: Islands Dark -> ExperimentalDark -> Darcula, plus editor color schemes
   `${PLATFORM_RESOURCES}/themes/islands/ManyIslandsDark.theme.json`,
   `${PLATFORM_RESOURCES}/themes/islands/IslandSchemeDark.xml`,
@@ -81,6 +85,13 @@ const FILES = [
     'vcs/push',
     'vcs/update',
     'nodes/folder',
+    'nodes/library',
+    'general/edit',
+    'general/editorOnly',
+    'general/editorPreview',
+    'general/previewOnly',
+    'general/remove',
+    'general/copy',
     'nodes/module',
     'nodes/ideaProject',
     'nodes/sourceRoot',

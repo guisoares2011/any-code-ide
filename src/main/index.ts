@@ -10,7 +10,7 @@ import { homedir } from 'node:os'
 import { closeProject, explicitProject, openProject, openRoots } from './project'
 import { mergeRecent, OpenProjectsStore, readJetBrainsRecent, RecentProjectsStore } from './recentProjects'
 import { killAllPtys, registerPtyHandlers } from './pty'
-import { registerRunHandlers } from './runConfigurations'
+import { registerRunHandlers } from './runConfigurations/index'
 import { watchProject } from './watcher'
 
 /**
@@ -104,7 +104,7 @@ onSend('project:activated', (root) => {
 })
 registerFsHandlers()
 registerGitHandlers()
-registerRunHandlers()
+registerRunHandlers(app.getPath('userData'))
 
 // Claude Code connects here (/ide); terminals get CLAUDE_CODE_SSE_PORT so `claude` finds it.
 const bridge = createBridge({

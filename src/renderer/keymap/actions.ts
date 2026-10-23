@@ -4,7 +4,7 @@
 // handler runs, like IntelliJ's context-dependent action handlers.
 
 /** Where keyboard focus is; set with data-focus-area on a container element. */
-export type FocusArea = 'editor' | 'terminal' | 'run' | 'tree' | 'popup' | 'other'
+export type FocusArea = 'editor' | 'terminal' | 'run' | 'tree' | 'popup' | 'dialog' | 'other'
 
 export interface ActionContext {
   focusArea: FocusArea

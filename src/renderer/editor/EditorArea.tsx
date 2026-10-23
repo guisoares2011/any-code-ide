@@ -8,6 +8,8 @@ import { closeTab, workbench, type EditorTab } from '../state/workbench'
 import { gitState } from '../state/git'
 import { useStore } from '../state/store'
 import { VcsDiffHost } from '../vcs/VcsDiffHost'
+import { isMarkdownFile, LAYOUT_ACTIONS, layoutOf, markdownLayouts, setMarkdownLayout } from '../markdown/layout'
+import { MarkdownPreview } from '../markdown/MarkdownPreview'
 import { Icon } from '../ui/Icon'
 import { fileIconName } from '../ui/icons'
 import { applyPendingReveal, openDocument, releaseDocument, revealRequests, type DocumentState } from './documents'
@@ -67,11 +69,68 @@ export function EditorArea() {
         ) : active?.kind === 'vcs-diff' ? (
           <VcsDiffHost key={active.path} path={active.filePath!} />
         ) : active ? (
-          <MonacoHost path={active.path} />
+          <FileEditor path={active.path} />
         ) : (
           <EditorPlaceholder />
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * A file editor; Markdown files add a rendered preview beside or instead of the text, switched like
+ * IntelliJ's TextEditorWithPreview. The Monaco host keeps its place in the tree, so switching tabs
+ * never recreates the editor.
+ */
+function FileEditor({ path }: { path: string }) {
+  const markdown = isMarkdownFile(path)
+  const layout = useStore(markdownLayouts, (s) => layoutOf(path, s.byPath))
+  const effective = markdown ? layout : 'editor'
+
+  useActions(
+    () =>
+      LAYOUT_ACTIONS.map((action) => ({
+        id: action.id,
+        text: action.text,
+        isEnabled: () => {
+          const active = workbench.get().activeTab
+          return active !== null && isMarkdownFile(active)
+        },
+        perform: () => {
+          const active = workbench.get().activeTab
+          if (active) setMarkdownLayout(active, action.layout)
+        },
+      })),
+    [],
+  )
+
+  return (
+    <div className={`editor-panes layout-${effective}`}>
+      <div className="editor-pane">
+        <MonacoHost path={path} />
+      </div>
+      {effective !== 'editor' && (
+        <div className="preview-pane">
+          <MarkdownPreview path={path} />
+        </div>
+      )}
+      {markdown && (
+        <div className="preview-layout-toolbar" role="toolbar" aria-label="Markdown layout">
+          {LAYOUT_ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              className={`icon-button${layout === action.layout ? ' selected' : ''}`}
+              title={action.text}
+              aria-label={action.text}
+              aria-pressed={layout === action.layout}
+              onClick={() => setMarkdownLayout(path, action.layout)}
+            >
+              <Icon name={action.icon} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

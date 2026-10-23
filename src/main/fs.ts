@@ -1,5 +1,5 @@
 import { open, readdir, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import type { DirEntry, FileContent } from '@shared/ipc'
 import { listProjectFiles } from './fileIndex'
 import { handle } from './ipc'
@@ -31,7 +31,34 @@ export async function readFileContent(path: string): Promise<FileContent> {
   }
 }
 
+const IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+}
+
+export async function readImageDataUrl(path: string): Promise<string | null> {
+  const type = IMAGE_TYPES[extname(path).toLowerCase()]
+  if (!type) return null
+  try {
+    if ((await stat(path)).size > MAX_TEXT_BYTES) return null
+    const handleRef = await open(path, 'r')
+    try {
+      return `data:${type};base64,${(await handleRef.readFile()).toString('base64')}`
+    } finally {
+      await handleRef.close()
+    }
+  } catch {
+    return null
+  }
+}
+
 export function registerFsHandlers(): void {
+  handle('fs:readDataUrl', (path) => readImageDataUrl(assertInsideProject(path)))
   handle('fs:readDir', (path) => readDirEntries(assertInsideProject(path)))
   handle('fs:readFile', (path) => readFileContent(assertInsideProject(path)))
   handle('fs:writeFile', (path, content) => writeFile(assertInsideProject(path), content, 'utf8'))

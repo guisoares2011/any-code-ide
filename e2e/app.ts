@@ -35,6 +35,8 @@ export async function createProject(): Promise<string> {
 export interface LaunchOptions {
   /** Make the project a git repository with everything committed. */
   git?: boolean
+  /** Extra files written before the app starts. */
+  setup?: (root: string) => Promise<void>
 }
 
 function gitInit(root: string): void {
@@ -50,6 +52,7 @@ function gitInit(root: string): void {
 /** Launches the built app hidden (ANYCODE_HEADLESS=1) on a temporary project. */
 export async function launch(options: LaunchOptions = {}): Promise<Fixture> {
   const project = await createProject()
+  await options.setup?.(project)
   if (options.git) gitInit(project)
   const claudeConfigDir = await mkdtemp(join(tmpdir(), 'anycode-claude-'))
   const userData = await mkdtemp(join(tmpdir(), 'anycode-userdata-'))

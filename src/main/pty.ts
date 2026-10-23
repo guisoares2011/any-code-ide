@@ -53,8 +53,12 @@ export function shellQuote(word: string): string {
   return /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`
 }
 
-/** Login shell invocation: interactive shell, or `exec <command>` so the shell's PATH setup applies. */
-export function shellInvocation(shell: string, command: readonly string[] | undefined): { file: string; args: string[] } {
+/**
+ * Login shell invocation: interactive shell, `exec <command>`, or a script; always through the login
+ * shell so the user's PATH setup (mvn, node, claude...) applies.
+ */
+export function shellInvocation(shell: string, command: readonly string[] | undefined, script?: string): { file: string; args: string[] } {
+  if (script) return { file: shell, args: ['-l', '-c', script] }
   if (!command || command.length === 0) return { file: shell, args: ['-l'] }
   return { file: shell, args: ['-l', '-c', `exec ${command.map(shellQuote).join(' ')}`] }
 }
@@ -71,13 +75,13 @@ function flush(id: string): void {
 
 export function createPty(owner: WebContents, options: PtyCreateOptions, extraEnv: Record<string, string> = {}): string {
   const cwd = assertInsideProject(options.cwd)
-  const { file, args } = shellInvocation(process.env.SHELL ?? '/bin/zsh', options.command)
+  const { file, args } = shellInvocation(process.env.SHELL ?? '/bin/zsh', options.command, options.script)
   const pty = spawn(file, args, {
     name: 'xterm-256color',
     cols: options.cols,
     rows: options.rows,
     cwd,
-    env: terminalEnv(process.env, extraEnv),
+    env: terminalEnv(process.env, { ...extraEnv, ...options.env }),
   })
   const id = randomUUID()
   const session: Session = { pty, owner, pending: '', flushScheduled: false }

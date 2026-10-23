@@ -1,6 +1,8 @@
 import type { AtMention, BridgeStatus, EditorSelection, McpToolResult } from './bridge'
 import type { GitCommandResult, GitStatus } from './git'
 import type { LanguageServerId } from './languageServers'
+import type { MavenDependenciesResult, MavenModule } from './maven'
+import type { RunCommand, RunConfigurationSpec } from './runConfigurations'
 
 // IPC contract shared by main, preload and renderer. Every channel is declared here once;
 // the preload only forwards channels listed in these constants.
@@ -49,20 +51,16 @@ export interface PtyCreateOptions {
   rows: number
   /** Command line to run instead of the user's login shell, e.g. ["claude"]. */
   command?: string[]
+  /** Shell script to run instead (`$SHELL -l -c <script>`); used by run configurations. */
+  script?: string
+  /** Extra environment variables. */
+  env?: Record<string, string>
 }
 
 export interface PtyExit {
   id: string
   exitCode: number
   signal: number | null
-}
-
-export interface RunConfiguration {
-  /** Stable id within the project, e.g. "npm:dev" or "gradle:test". */
-  id: string
-  name: string
-  kind: 'npm' | 'gradle' | 'maven'
-  command: string[]
 }
 
 /** Request/response channels: renderer -> main via ipcRenderer.invoke. */
@@ -79,6 +77,8 @@ export interface InvokeChannels {
   'fs:readDir': { args: [path: string]; result: DirEntry[] }
   'fs:readFile': { args: [path: string]; result: FileContent }
   'fs:writeFile': { args: [path: string, content: string]; result: void }
+  /** An image inside a project as a data: URL (Markdown preview); null when missing or not an image. */
+  'fs:readDataUrl': { args: [path: string]; result: string | null }
   /** Files of a project root, relative to it (git ls-files when available). */
   'fs:listFiles': { args: [root: string]; result: string[] }
   /** Current branch name, a short commit hash when detached, or null outside a git work tree. */
@@ -95,7 +95,16 @@ export interface InvokeChannels {
   'pty:kill': { args: [id: string]; result: void }
   /** Interrupts the foreground job (^C), then kills the process group if it outlives the grace period. */
   'pty:stop': { args: [id: string]; result: void }
-  'run:configurations': { args: [root: string]; result: RunConfiguration[] }
+  /** Every run configuration of a project: project files, AnyCode's, IntelliJ's and detected ones. */
+  'run:configurations': { args: [root: string]; result: RunConfigurationSpec[] }
+  /** Saves privately or as .run/<name>.run.xml; returns the configuration with its new id/origin. */
+  'run:save': { args: [root: string, spec: RunConfigurationSpec, asProjectFile: boolean]; result: RunConfigurationSpec }
+  'run:delete': { args: [root: string, id: string]; result: void }
+  /** The shell script, directory and environment that run a configuration. */
+  'run:command': { args: [root: string, spec: RunConfigurationSpec]; result: RunCommand }
+  'maven:modules': { args: [root: string]; result: MavenModule[] }
+  /** Runs `dependency:tree` for the whole reactor (slow: starts Maven). */
+  'maven:dependencies': { args: [root: string]; result: MavenDependenciesResult }
   /** Answer to a bridge:toolCall event. */
   'bridge:toolResult': { args: [requestId: string, result: McpToolResult]; result: void }
   'bridge:status': { args: []; result: BridgeStatus }
@@ -140,6 +149,7 @@ export const INVOKE_CHANNELS = [
   'fs:readFile',
   'fs:writeFile',
   'fs:listFiles',
+  'fs:readDataUrl',
   'git:branch',
   'git:status',
   'git:headContent',
@@ -151,6 +161,11 @@ export const INVOKE_CHANNELS = [
   'pty:kill',
   'pty:stop',
   'run:configurations',
+  'run:save',
+  'run:delete',
+  'run:command',
+  'maven:modules',
+  'maven:dependencies',
   'bridge:toolResult',
   'bridge:status',
   'lsp:start',

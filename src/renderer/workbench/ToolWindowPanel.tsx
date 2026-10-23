@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { shortcutFor } from '../keymap/service'
+import { MavenHeaderActions, MavenView } from '../maven/MavenView'
 import { NotificationsView } from '../notifications/NotificationsView'
 import { ProblemsView } from '../problems/ProblemsView'
 import { ProjectView } from '../project/ProjectView'
@@ -28,12 +29,15 @@ function ToolWindowContent({ id, visible }: { id: ToolWindowId; visible: boolean
       return <ProblemsView />
     case 'Notifications':
       return <NotificationsView visible={visible} />
+    case 'Maven':
+      return <MavenView visible={visible} />
   }
 }
 
 function HeaderExtra({ id }: { id: ToolWindowId }): ReactNode {
   if (id === 'Terminal') return <TerminalTabs />
   if (id === 'Run') return <RunTabs />
+  if (id === 'Maven') return <MavenHeaderActions />
   return null
 }
 

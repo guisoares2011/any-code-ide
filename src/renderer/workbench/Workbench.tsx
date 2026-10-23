@@ -1,6 +1,7 @@
 import { EditorArea } from '../editor/EditorArea'
 import { useActions } from '../keymap/service'
 import { PopupHost } from '../popups/SearchPopup'
+import { RunConfigurationsDialog } from '../run/RunConfigurationsDialog'
 import { useStore } from '../state/store'
 import { setPanelSize, workbench } from '../state/workbench'
 import { MainToolbar } from './MainToolbar'
@@ -69,6 +70,7 @@ export function Workbench() {
       </div>
       <StatusBar />
       <PopupHost />
+      <RunConfigurationsDialog />
     </div>
   )
 }

@@ -17,7 +17,7 @@ export function activeKeymap(): Keymap {
   return keymap
 }
 
-const FOCUS_AREAS: ReadonlySet<string> = new Set<FocusArea>(['editor', 'terminal', 'run', 'tree', 'popup', 'other'])
+const FOCUS_AREAS: ReadonlySet<string> = new Set<FocusArea>(['editor', 'terminal', 'run', 'tree', 'popup', 'dialog', 'other'])
 
 /** Focus area of the focused element: the closest [data-focus-area] ancestor. */
 export function currentFocusArea(): FocusArea {

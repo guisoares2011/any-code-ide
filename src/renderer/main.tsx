@@ -10,6 +10,7 @@ import { installBridgeClient } from './bridge/bridgeClient'
 import { setupMonaco } from './editor/monacoSetup'
 import { installEditorOpener } from './editor/navigation'
 import { installLanguageServers } from './lsp/client'
+import { installMarkdownSupport } from './markdown/markdownSupport'
 import { installGitStatus } from './state/git'
 import { installKeymapDispatcher } from './keymap/service'
 import { workbench } from './state/workbench'
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
   setupMonaco()
   installEditorOpener()
   installLanguageServers()
+  installMarkdownSupport()
   const { projects, current } = await window.anycode.invoke('project:initial')
   const project = projects.find((p) => p.root === current) ?? null
   workbench.set({ project, projects })

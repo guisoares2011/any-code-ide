@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { basename, dirname, relativePath } from '@shared/paths'
 import { actionLabel, actions, performAction, shortcutFor, useActions, useActionRegistryVersion } from '../keymap/service'
 import type { RecentProject } from '@shared/ipc'
-import { runConfiguration, runState } from '../run/runState'
+import { RUN_CONFIGURATION_TYPES, type RunConfigurationSpec } from '@shared/runConfigurations'
+import { openRunConfigurationsEditor, runConfiguration, runState } from '../run/runState'
 import { openProjectPath, pickAndOpenProject } from '../state/projects'
 import { useStore } from '../state/store'
 import { closePopup, openFile, requestFocus, switchProject, workbench, type PopupKind } from '../state/workbench'
@@ -26,7 +27,15 @@ interface Item {
 }
 
 // Component-level and internal ids that make no sense in Find Action.
-const HIDDEN_ACTIONS = /^(Tree-|List-|Popup\.|EditSourceOnEnter$|SearchEverywhere\.)/
+const HIDDEN_ACTIONS = /^(Tree-|List-|Popup\.|EditSourceOnEnter$|SearchEverywhere\.|Commit\.Execute$)/
+
+const RUN_TYPE_TITLES = Object.fromEntries(RUN_CONFIGURATION_TYPES.map((t) => [t.type, t.title])) as Record<RunConfigurationSpec['type'], string>
+const ORIGIN_TITLES: Record<RunConfigurationSpec['origin'], string> = {
+  detected: 'detected',
+  anycode: 'AnyCode',
+  'project-file': 'project file',
+  intellij: 'IntelliJ',
+}
 
 let fileCache: { root: string; files: string[] } | null = null
 
@@ -156,11 +165,23 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
           key: `run:${item.id}`,
           group: 'Run Configurations',
           label: item.name,
-          hint: item.command.join(' '),
+          hint: `${RUN_TYPE_TITLES[item.type]}${item.origin === 'detected' ? '' : ` · ${ORIGIN_TITLES[item.origin]}`}`,
           icon: 'run/run',
           positions: match.positions,
           labelOffset: 0,
           run: () => void runConfiguration(item),
+        })
+      }
+      const edit = rank(query, [{ text: 'Edit Configurations…' }], (a) => a.text)[0]
+      if (edit) {
+        result.push({
+          key: 'action:editRunConfigurations',
+          group: 'Actions',
+          label: 'Edit Configurations…',
+          icon: 'general/edit',
+          positions: edit.match.positions,
+          labelOffset: 0,
+          run: openRunConfigurationsEditor,
         })
       }
       return result

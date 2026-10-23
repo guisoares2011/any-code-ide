@@ -914,3 +914,309 @@ button {
 .button:disabled {
   opacity: 0.5;
 }
+
+/* ── Dialogs ────────────────────────────────────────────────────────────── */
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  background: var(--c-container-dialog-bg);
+  border: 1px solid var(--c-container-dialog-border);
+  border-radius: calc(var(--island-radius) + 2px);
+  box-shadow: 0 12px 40px var(--c-transparent-black-40);
+  overflow: hidden;
+}
+
+.dialog-title {
+  padding: 12px 16px 8px;
+  font-weight: 600;
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--c-container-dialog-border);
+}
+
+.run-dialog {
+  width: min(920px, 92vw);
+  height: min(600px, 80vh);
+}
+
+.run-dialog-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.run-dialog-list {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--c-container-dialog-border);
+  position: relative;
+}
+
+.run-dialog-list .tree {
+  flex: 1;
+}
+
+.run-dialog-toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px 8px;
+}
+
+.run-dialog-add {
+  position: absolute;
+  top: 36px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--c-container-popup-bg);
+  border: 1px solid var(--c-container-popup-border);
+  border-radius: var(--component-radius);
+}
+
+.run-dialog-add .popup-item {
+  text-align: left;
+}
+
+.run-dialog-add .popup-item:hover {
+  background: var(--c-selection-bg-active);
+}
+
+.run-dialog-form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-field {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.form-label {
+  color: var(--c-text-secondary);
+}
+
+.form-note {
+  color: var(--c-text-muted);
+  padding-left: 162px;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 162px;
+}
+
+.text-field {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+  border: 1px solid var(--c-control-border);
+  background: var(--c-control-bg);
+  color: var(--c-text-default);
+  font: inherit;
+  outline: none;
+  user-select: text;
+}
+
+.text-field:focus {
+  border-color: var(--c-control-brand-border);
+}
+
+.script-field {
+  height: 120px;
+  padding: 6px 8px;
+  resize: vertical;
+  font-family: var(--font-mono);
+}
+
+/* ── Markdown editor + preview ──────────────────────────────────────────── */
+
+.editor-panes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.editor-pane,
+.preview-pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-panes.layout-preview .editor-pane {
+  display: none;
+}
+
+.editor-panes.layout-split .preview-pane {
+  border-left: 1px solid var(--c-container-editor-border);
+}
+
+.preview-layout-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--component-radius);
+  background: var(--c-editor-floating-toolbar-bg, var(--c-container-popup-bg));
+  border: 1px solid var(--c-container-popup-border);
+}
+
+.preview-layout-toolbar .icon-button.selected {
+  background: var(--c-toolbar-selected-bg);
+}
+
+.markdown-preview {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 24px 32px 48px;
+  user-select: text;
+  cursor: auto;
+}
+
+.markdown-body {
+  max-width: 880px;
+  margin: 0 auto;
+  line-height: 1.6;
+  font-size: 14px;
+  color: var(--c-text-default);
+  word-wrap: break-word;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1.4em 0 0.6em;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.markdown-body h1,
+.markdown-body h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--c-container-editor-border-alt);
+}
+
+.markdown-body h1 { font-size: 2em; }
+.markdown-body h2 { font-size: 1.5em; }
+.markdown-body h3 { font-size: 1.25em; }
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body table,
+.markdown-body .md-code {
+  margin: 0 0 1em;
+}
+
+.markdown-body a {
+  color: var(--c-text-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: var(--c-layer-1-bg);
+}
+
+.markdown-body pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border-radius: var(--component-radius);
+  background: var(--c-layer-1-bg);
+  line-height: 1.45;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 13px;
+}
+
+.markdown-body .md-shell {
+  position: relative;
+}
+
+.markdown-body .md-run {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 10px;
+  border-radius: var(--component-radius);
+  background: var(--c-toolbar-run-bg);
+  color: var(--c-text-over-accent);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.markdown-body .md-run:hover {
+  opacity: 1;
+  background: var(--c-toolbar-run-bg-hovered);
+}
+
+.markdown-body blockquote {
+  padding: 0 1em;
+  color: var(--c-text-secondary);
+  border-left: 3px solid var(--c-container-editor-border-alt);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 12px;
+  border: 1px solid var(--c-container-editor-border-alt);
+}
+
+.markdown-body img {
+  max-width: 100%;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--c-container-editor-border-alt);
+  margin: 1.5em 0;
+}

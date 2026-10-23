@@ -14,8 +14,14 @@ const terminalIcons = import.meta.glob('@intellij/plugins/terminal/resources/ico
   eager: true,
 }) as Record<string, string>
 
+const mavenIcons = import.meta.glob('@intellij/plugins/maven/src/main/resources/images/expui/**/*.svg', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
+
 const byName = new Map<string, string>()
-for (const [path, url] of Object.entries({ ...platformIcons, ...terminalIcons })) {
+for (const [path, url] of Object.entries({ ...platformIcons, ...terminalIcons, ...mavenIcons })) {
   const name = path.replace(/^.*\/expui\//, '').replace(/\.svg$/, '')
   byName.set(name, url)
 }

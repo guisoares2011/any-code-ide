@@ -4,7 +4,15 @@ import { useStore } from '../state/store'
 import { openPopup, workbench } from '../state/workbench'
 import { currentRunGroup, useRunGroup } from '../terminal/ptySessions'
 import { Icon } from '../ui/Icon'
-import { loadRunConfigurations, rerunActive, runSelected, runState, selectedConfiguration, stopActive } from './runState'
+import {
+  loadRunConfigurations,
+  openRunConfigurationsEditor,
+  rerunActive,
+  runSelected,
+  runState,
+  selectedConfiguration,
+  stopActive,
+} from './runState'
 
 /** Toolbar run widget: configuration selector, Run and Stop (New UI RedesignedRunConfigurationSelector). */
 export function RunWidget() {
@@ -30,6 +38,7 @@ export function RunWidget() {
       { id: 'Rerun', isEnabled: (c) => c.focusArea === 'run' && currentRunGroup().activeInfo() !== undefined, perform: rerunActive },
       { id: 'ChooseRunConfiguration', perform: () => openPopup('ChooseRunConfiguration') },
       { id: 'RedesignedRunConfigurationSelector', perform: () => openPopup('ChooseRunConfiguration') },
+      { id: 'editRunConfigurations', text: 'Edit Configurations…', perform: openRunConfigurationsEditor },
     ],
     [],
   )

@@ -4,7 +4,7 @@ import { createStore } from './store'
 
 export type Anchor = 'left' | 'bottom' | 'right'
 
-export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Problems View' | 'Terminal' | 'Run' | 'Notifications'
+export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Problems View' | 'Terminal' | 'Run' | 'Notifications' | 'Maven'
 
 export interface ToolWindowSpec {
   id: ToolWindowId
@@ -29,6 +29,7 @@ export const TOOL_WINDOWS: readonly ToolWindowSpec[] = [
   { id: 'Terminal', anchor: 'bottom', title: 'Terminal', icon: 'toolwindow/terminal@20x20', activateActionId: 'ActivateTerminalToolWindow' },
   { id: 'Run', anchor: 'bottom', title: 'Run', icon: 'toolwindows/run@20x20', activateActionId: 'ActivateRunToolWindow' },
   { id: 'Notifications', anchor: 'right', title: 'Notifications', icon: 'toolwindows/notifications@20x20', activateActionId: 'ActivateNotificationsToolWindow' },
+  { id: 'Maven', anchor: 'right', title: 'Maven', icon: 'toolwindow/maven@20x20', activateActionId: 'ActivateMavenToolWindow' },
 ]
 
 export const toolWindow = (id: ToolWindowId): ToolWindowSpec => TOOL_WINDOWS.find((t) => t.id === id)!

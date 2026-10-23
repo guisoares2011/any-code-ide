@@ -31,14 +31,43 @@ Três camadas, em ordem de prioridade:
 Estado (2026-10-23): camadas 1 e 2 implementadas (`src/main/bridge/`, `src/renderer/bridge/`) e validadas contra o `claude` 2.1.309, que conecta sozinho (ver `docs/reverse-engineering.md`, B1–B6). Para revalidar depois de atualizar o `claude`, rode `node scripts/run-bridge-probe.mjs`. Tools implementadas: `openFile`, `openDiff` (bloqueante: aceitar devolve `FILE_SAVED` + conteúdo final, e quem escreve o arquivo é o Claude; rejeitar ou fechar a aba devolve `DIFF_REJECTED`), `getCurrentSelection`, `getLatestSelection`, `getOpenEditors`, `getWorkspaceFolders`, `getDiagnostics` (markers do Monaco por enquanto), `checkDocumentDirty`, `saveDocument`, `close_tab` (não anunciada) e `closeAllDiffTabs`. Notificações: `selection_changed` (debounce de 100 ms) e `at_mentioned` (ação `AnyCode.SendSelectionToClaude`, sem atalho padrão porque ⌥⌘K é Commit and Push no keymap do IntelliJ). O lockfile respeita `CLAUDE_CONFIG_DIR`; os E2E usam um diretório temporário. Shift+Enter no terminal envia LF (o Ctrl+J que o Claude Code documenta como nova linha), já que o xterm.js 6 não implementa o protocolo de teclado do kitty (B4).
 3. **Futuro:** painel de chat nativo via Claude Agent SDK ou ACP (o IntelliJ do usuário já tem o agente `claude-acp` instalado em `~/Library/Application Support/JetBrains/acp-agents/`). Só depois que 1 e 2 estiverem sólidos.
 
-## Run/Stop básico (v1)
+## Run configurations e Maven
 
 Executar e parar o projeto sem sair da IDE. Não é um debugger.
 
-- **Configurações:** detectadas automaticamente na raiz do projeto: scripts do `package.json` (com o package manager detectado pelo lockfile), tasks do Gradle (`./gradlew` quando existir) e goals do Maven (`./mvnw` quando existir). O usuário também pode salvar comandos próprios por projeto. Importar run configurations do IntelliJ (`.idea/workspace.xml`, `.run/*.run.xml`) fica para depois.
-- **Execução:** processo filho via `node-pty` no processo main, com `cwd` = raiz do projeto. A saída vai para a tool window **Run** (âncora inferior, uma aba por execução, xterm.js) e os links `arquivo:linha` abrem no editor. Stop encerra o grupo de processos (SIGINT; se o processo não sair, SIGKILL após timeout). Cada projeto mantém suas execuções vivas ao trocar de projeto, como o terminal.
-- **Atalhos** (action IDs do IntelliJ; bindings efetivos no macOS conferidos em `actions-catalog.mac.json`): `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R, `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4. O seletor da barra superior usa o ID `RedesignedRunConfigurationSelector` (sem atalho).
-- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura, profiler, run configurations remotas e compound.
+- **Tipos** (`src/shared/runConfigurations.ts`), espelhando o IntelliJ: Spring Boot (main class, módulo, perfis, VM options, argumentos), Maven (linha de comando e perfis), npm, Shell Script e Gradle. Todos têm variáveis de ambiente (campo `KEY=value;…`, como o IntelliJ) e diretório de trabalho.
+- **Origens**, com precedência por nome nesta ordem:
+  1. `.run/<nome>.run.xml` (arquivo de projeto, **formato do IntelliJ**, que lê o mesmo arquivo);
+  2. privadas do AnyCode (`<userData>/run-configurations/<sha1(root)>.json`);
+  3. importadas, somente leitura, do `RunManager` do `.idea/workspace.xml` (sem as temporárias; nunca escrever nesse arquivo);
+  4. detectadas: scripts do `package.json`, tasks do Gradle e uma Spring Boot por classe com `@SpringBootApplication`.
+
+  Editar uma configuração importada ou detectada cria uma cópia do AnyCode com o mesmo nome. "Store as project file" grava em `.run/`.
+- **Diálogo Run/Debug Configurations** (`editRunConfigurations`): toolbar do run widget → "Edit Configurations…" ou Find Action.
+- **Execução:** o main monta o script (`runConfigurations/command.ts`) e o renderer roda num PTY da tool window Run (`$SHELL -l -c`, então o PATH do usuário vale).
+  - **Spring Boot multi-módulo:** `mvn -q -pl <módulo> -am install -DskipTests && mvn -pl <módulo> spring-boot:run -Dspring-boot.run.main-class=… [-Dspring-boot.run.profiles/jvmArguments/arguments]`. O `install` grava os módulos do projeto no `~/.m2`, a prática comum de quem delega o build ao Maven.
+  - **Validado** num projeto temporário (lib + app) com o Spring Boot 3.5.7 do `~/.m2`.
+- **Maven:** o executável vem do `./mvnw` do projeto; depois de `mvn` no PATH da shell de login; por fim, da distribuição mais nova em `~/.m2/wrapper/dists`.
+- **Tool window Maven** (stripe direita, `ActivateMavenToolWindow`):
+  - reator lido dos `pom.xml`, com Lifecycle (duplo clique roda `<artifactId> [<fase>]`), Profiles, Plugins e Dependencies;
+  - as dependências vêm de `org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree`, com versão fixada porque o 3.9.4 usa por padrão a 3.6.0;
+  - "Reload All Maven Projects" (`Maven.Reimport`).
+- **Atalhos:** `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R (no Run), `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4.
+- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura e profiler; JUnit (as do usuário são quase todas temporárias); Docker.
+
+## Markdown
+
+Preview renderizado de `.md` com blocos de shell executáveis (`src/renderer/markdown/`).
+
+- **Layouts** iguais ao `TextEditorWithPreview` do IntelliJ, com os mesmos action IDs: `TextEditorWithPreview.Layout.EditorOnly`, `…EditorAndPreview`, `…PreviewOnly`. A toolbar fica no canto do editor e a escolha vale por arquivo. README abre em Preview Only; os demais `.md`, em Editor and Preview.
+- **Renderização:** markdown-it (GFM: tabelas, linkify, HTML) sanitizado com DOMPurify, sem `style`/`form`/`input`/`iframe`.
+  - Código colorido com `monaco.editor.colorize` e âncoras de heading no formato do GitHub.
+  - Imagens relativas são lidas via `fs:readDataUrl`, restrito ao projeto.
+  - Links: `#âncora` rola o preview; caminho relativo abre o arquivo numa aba; `http(s)` vai para o navegador.
+- **Blocos de shell** (`bash`, `sh`, `shell`, `zsh`, `console`, `fish`…):
+  - têm ▶ Run no preview e o CodeLens "▶ Run in Terminal" no editor;
+  - os dois rodam o mesmo comando (`findShellFences`) numa **nova aba do terminal**, com `cwd` = pasta do arquivo;
+  - como o `trimPrompt` do IntelliJ: se alguma linha começa com `$`, só essas rodam (o resto é saída), sem o prompt nem o `# comentário` final.
 
 ## Engenharia reversa com REA
 
@@ -97,6 +126,7 @@ Mapa do que existe hoje no renderer:
 - `keymap/`: `keystroke`/`shortcut` (formato Swing), `keymapXml` (XML de keymap e de plugin), `keymap` (resolução com semântica do IntelliJ), `macKeymap` (carrega `$default` → `Mac OS X 10.5+` + atalhos do plugin de terminal + gestos double-Shift/Ctrl + `componentShortcuts`), `dispatcher` (captura de teclas, chords, double-modifier, allowlist do terminal), `actions` (registry; vários handlers por ID, executa o primeiro habilitado) e `service` (singleton + `useActions`).
 - `theme/`: resolve o tema e expõe tokens como `--c-<cor>`/`--ui-<Chave>`. Também gera os temas do Monaco e do xterm a partir do esquema do editor.
 - `state/workbench.ts`: tool windows (layout padrão V2), abas, popups e pedidos de foco. `terminal/ptySessions.ts`: sessões PTY por grupo (Terminal, Run) que sobrevivem a esconder o painel.
+- `markdown/`: `shellFences` (blocos executáveis e corte do prompt), `render` (HTML sanitizado), `MarkdownPreview`, `layout` (Editor/Split/Preview por arquivo) e `markdownSupport` (CodeLens "Run in Terminal").
 - Áreas de foco: `data-focus-area` (`editor`, `terminal`, `run`, `tree`, `popup`) decide quais handlers ficam habilitados.
 
 ## Comandos
@@ -137,8 +167,8 @@ Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 
 4. ✅ Bridge IDE ↔ Claude Code (diffs, seleção, diagnostics)
 5. ✅ LSP de JS/TS (diagnostics → Problems e `getDiagnostics` do bridge, ⌘B, hover, completion, Structure)
 6. ✅ LSP de Java/Kotlin. O jdtls traz erros e ⌘B, mesmo sem build tool. O kotlin-lsp só analisa projetos Gradle/Maven; sem eles, Structure funciona e o aviso aparece em Notifications.
-7. ✅ Run/Stop básico (npm scripts, Gradle, Maven; tool window Run). Falta salvar comandos próprios por projeto.
+7. ✅ Run/Stop e run configurations editáveis (Spring Boot, Maven, npm, Shell, Gradle), compatíveis com `.run/*.run.xml` do IntelliJ e importando o `workspace.xml`; tool window Maven com árvore de dependências.
 8. ✅ Painel Git: tool window Commit com checkboxes, diff HEAD ↔ Local, commit parcial com `git commit --only`, Commit and Push (define o upstream no primeiro push), cores `FILESTATUS_*` na árvore e nas abas, e atualização quando o agente commita (o watcher deixa passar `.git/index`, `HEAD` e `refs/heads`). Atalhos: `CheckinProject` ⌘K, `Vcs.Push` ⇧⌘K, `Diff.ShowDiff` ⌘D, ⌘⏎ (`Commit.Execute`). Falta o Rollback e o log (tool window Version Control).
 9. ✅ Multi-projeto: uma janela, vários projetos, cada um com as próprias abas, tool windows, terminais (com o seu `claude`), execuções e LSPs. O widget de projeto abre o popup Projects, que lista os abertos, os recentes (AnyCode + `recentProjects.xml` de todas as IDEs JetBrains instaladas), "Open…" e aceita um caminho digitado. Atalhos: `NextProjectWindow` ⌥⌘\`, `PreviousProjectWindow` ⇧⌥⌘\`, `CloseProject`, `$LRU`, `OpenFile`. O lockfile do bridge lista todas as raízes abertas. Na próxima abertura, reabre os projetos da sessão anterior; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
 
-Pendências conhecidas: Rollback e log no Git; comandos de Run salvos por projeto; ESLint no TS; tela de Settings; empacotamento como `.app` assinado.
+Pendências conhecidas: Rollback e log no Git; JUnit nas run configurations; ESLint no TS; tela de Settings; empacotamento como `.app` assinado.

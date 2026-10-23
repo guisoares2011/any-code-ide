@@ -22,6 +22,7 @@ Behavior recreated in AnyCode's own code from the Apache-2.0 sources of the same
 - modifier double-click timings (`ModifierKeyDoubleClickHandler`): `src/renderer/keymap/doubleModifier.ts`
 - the list of actions allowed while the terminal has focus (`TerminalEventDispatcher.ALLOWED_ACTION_IDS`): `src/renderer/keymap/terminalAllowedActions.ts`
 - the New UI default tool window layout (`defaultToolWindowlayoutProvider.kt`): `src/renderer/state/workbench.ts`
+- the Markdown preview layouts (`TextEditorWithPreview`) and the prompt trimming of runnable shell blocks (`CommandRunnerExtension.trimPrompt`): `src/renderer/markdown/`
 
 AnyCode is not affiliated with or endorsed by JetBrains. It does not use JetBrains product names, logos or product icons in its branding.
 
@@ -40,3 +41,5 @@ AnyCode is not affiliated with or endorsed by JetBrains. It does not use JetBrai
 | react, react-dom | MIT |
 | fast-xml-parser | MIT |
 | electron | MIT |
+| markdown-it | MIT |
+| dompurify | MPL-2.0 OR Apache-2.0 (used under Apache-2.0) |

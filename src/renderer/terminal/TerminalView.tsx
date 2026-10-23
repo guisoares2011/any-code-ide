@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import { useActions } from '../keymap/service'
 import { useStore } from '../state/store'
-import { workbench } from '../state/workbench'
+import { showToolWindow, workbench } from '../state/workbench'
 import { Icon } from '../ui/Icon'
 import { currentTerminalGroup, terminalGroupFor, useTerminalGroup, type SessionGroup } from './ptySessions'
 
@@ -14,6 +14,22 @@ function shellTitle(group: SessionGroup): string {
 async function newShell(root: string): Promise<void> {
   const group = terminalGroupFor(root)
   await group.create({ title: shellTitle(group), cwd: root })
+  group.focusActive()
+}
+
+/**
+ * Runs commands in a new terminal tab of the current project (Markdown "Run in Terminal"). The tab
+ * is an interactive shell, so it stays open with the output and a prompt afterwards.
+ */
+export async function runInNewTerminal(command: string, cwd: string): Promise<void> {
+  const root = workbench.get().project?.root
+  if (!root) return
+  const group = terminalGroupFor(root)
+  const firstLine = command.split('\n')[0] ?? command
+  const title = firstLine.length > 28 ? `${firstLine.slice(0, 27)}…` : firstLine
+  showToolWindow('Terminal')
+  const id = await group.create({ title, cwd })
+  group.write(id, `${command}\r`)
   group.focusActive()
 }
 

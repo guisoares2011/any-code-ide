@@ -1,11 +1,13 @@
-import type { RunConfiguration } from '@shared/ipc'
+import type { RunConfigurationSpec } from '@shared/runConfigurations'
+import { notify } from '../state/notifications'
 import { createStore } from '../state/store'
 import { showToolWindow, workbench } from '../state/workbench'
 import { currentRunGroup } from '../terminal/ptySessions'
 
-export const runState = createStore<{ configurations: RunConfiguration[]; selected: string | null }>({
+export const runState = createStore<{ configurations: RunConfigurationSpec[]; selected: string | null; editing: boolean }>({
   configurations: [],
   selected: null,
+  editing: false,
 })
 
 export async function loadRunConfigurations(root: string): Promise<void> {
@@ -16,24 +18,37 @@ export async function loadRunConfigurations(root: string): Promise<void> {
   }))
 }
 
-export function selectedConfiguration(): RunConfiguration | undefined {
+export async function reloadRunConfigurations(): Promise<void> {
+  const root = workbench.get().project?.root
+  if (root) await loadRunConfigurations(root)
+}
+
+export function selectedConfiguration(): RunConfigurationSpec | undefined {
   const { configurations, selected } = runState.get()
   return configurations.find((c) => c.id === selected)
 }
 
 /** Runs a configuration in the Run tool window, reusing its tab when it already has one. */
-export async function runConfiguration(configuration: RunConfiguration): Promise<void> {
+export async function runConfiguration(configuration: RunConfigurationSpec, select = true): Promise<void> {
   const root = workbench.get().project?.root
   if (!root) return
-  runState.set({ selected: configuration.id })
+  if (select) runState.set({ selected: configuration.id })
   showToolWindow('Run', false)
+  let command
+  try {
+    command = await window.anycode.invoke('run:command', root, configuration)
+  } catch (error) {
+    notify('error', `Cannot run ${configuration.name}`, error instanceof Error ? error.message : String(error))
+    return
+  }
   const runGroup = currentRunGroup()
-  const existing = runGroup.findByTag(configuration.id)
+  const tag = `${configuration.id}\0${command.script}`
+  const existing = runGroup.findByTag(tag)
   if (existing) {
     runGroup.activate(existing.id)
     await runGroup.restart(existing.id)
   } else {
-    await runGroup.create({ title: configuration.name, cwd: root, command: configuration.command, tag: configuration.id })
+    await runGroup.create({ title: configuration.name, cwd: command.cwd, script: command.script, env: command.env, tag })
   }
 }
 
@@ -52,4 +67,12 @@ export function rerunActive(): void {
   const runGroup = currentRunGroup()
   const active = runGroup.activeInfo()
   if (active) void runGroup.restart(active.id)
+}
+
+export function openRunConfigurationsEditor(): void {
+  runState.set({ editing: true })
+}
+
+export function closeRunConfigurationsEditor(): void {
+  runState.set({ editing: false })
 }

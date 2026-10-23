@@ -21,6 +21,9 @@ export interface SessionStart {
   cwd: string
   /** Command line; omitted for an interactive login shell. */
   command?: string[]
+  /** Shell script (run configurations); takes precedence over `command`. */
+  script?: string
+  env?: Record<string, string>
   /** Extra state kept with the session, e.g. the run configuration. */
   tag?: string
 }
@@ -126,6 +129,8 @@ export class SessionGroup {
       cols: session.term.cols,
       rows: session.term.rows,
       ...(session.start.command ? { command: session.start.command } : {}),
+      ...(session.start.script ? { script: session.start.script } : {}),
+      ...(session.start.env ? { env: session.start.env } : {}),
     }
     const ptyId = await window.anycode.invoke('pty:create', options)
     session.ptyId = ptyId
@@ -168,6 +173,12 @@ export class SessionGroup {
     session.exitCode = exitCode
     session.term.write(`\r\n\x1b[2mProcess finished with exit code ${exitCode}\x1b[0m\r\n`)
     this.publish()
+  }
+
+  /** Types into a session as if the user did (e.g. a command and Enter). */
+  write(id: string, data: string): void {
+    const ptyId = this.sessions.get(id)?.ptyId
+    if (ptyId) void window.anycode.invoke('pty:write', ptyId, data)
   }
 
   /** Graceful stop: interrupt, then kill the process group if it does not exit. */

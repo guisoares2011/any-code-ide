@@ -7,6 +7,7 @@ import { useStore } from '../state/store'
 import { Icon } from '../ui/Icon'
 import { fileIconName } from '../ui/icons'
 import { dirname } from '@shared/paths'
+import { mavenDecorations, type DirDecoration } from './moduleRoots'
 import { sortEntries } from './sortEntries'
 
 interface Row {
@@ -27,7 +28,26 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
   const [children, setChildren] = useState(new Map<string, DirEntry[]>())
   const [expanded, setExpanded] = useState(() => new Set<string>([project.root]))
   const [selected, setSelected] = useState<string | null>(project.root)
+  const [decorations, setDecorations] = useState(new Map<string, DirDecoration>())
   const treeRef = useRef<HTMLDivElement>(null)
+
+  // Maven modules and source roots, like IntelliJ after importing the reactor; reread when a pom changes.
+  useEffect(() => {
+    let cancelled = false
+    const read = (): void => {
+      void window.anycode.invoke('maven:modules', project.root).then((modules) => {
+        if (!cancelled) setDecorations(mavenDecorations(project.root, modules))
+      })
+    }
+    read()
+    const off = window.anycode.on('fs:changed', (paths) => {
+      if (paths.some((p) => p.endsWith('/pom.xml') && p.startsWith(`${project.root}/`))) read()
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [project.root])
 
   const load = useCallback(async (dir: string) => {
     const entries = await window.anycode.invoke('fs:readDir', dir)
@@ -183,7 +203,12 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
 
   return (
     <div className="tree" tabIndex={0} ref={treeRef} data-focus-area="tree" role="tree" aria-label="Project">
-      {rows.map((row) => (
+      {rows.map((row) => {
+        const decoration = row.entry.kind === 'directory' ? decorations.get(row.entry.path) : undefined
+        const icon = row.entry.kind === 'directory' ? (row.depth === 0 ? 'nodes/module' : (decoration?.icon ?? 'nodes/folder')) : fileIconName(row.entry.name)
+        const vcsKind = vcs.get(row.entry.path)?.kind
+        const nameClass = [vcsKind ? `vcs-${vcsKind}` : '', decoration?.bold || row.depth === 0 ? 'module-root' : ''].filter(Boolean).join(' ')
+        return (
         <div
           key={row.entry.path}
           data-path={row.entry.path}
@@ -205,11 +230,13 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
               <Icon name={row.expanded ? 'general/chevronDown' : 'general/chevronRight'} size={16} />
             )}
           </span>
-          <Icon name={row.entry.kind === 'directory' ? (row.depth === 0 ? 'nodes/module' : 'nodes/folder') : fileIconName(row.entry.name)} />
-          <span className={vcs.get(row.entry.path) ? `vcs-${vcs.get(row.entry.path)!.kind}` : undefined}>{row.entry.name}</span>
+          <Icon name={icon} />
+          <span className={nameClass || undefined}>{row.entry.name}</span>
+          {decoration?.moduleName && <span className="module-name">[{decoration.moduleName}]</span>}
           {row.depth === 0 && <span className="hint">{project.root}</span>}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

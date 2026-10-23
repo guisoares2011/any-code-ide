@@ -53,7 +53,7 @@ export const DIFF_TAB_PREFIX = 'diff:'
 export const diffTabKey = (tabName: string): string => DIFF_TAB_PREFIX + tabName
 export const vcsDiffTabKey = (path: string): string => `vcsdiff:${path}`
 
-export type PopupKind = 'GotoFile' | 'GotoAction' | 'SearchEverywhere' | 'RecentFiles' | 'ChooseRunConfiguration' | 'Projects'
+export type PopupKind = 'GotoFile' | 'GotoAction' | 'SearchEverywhere' | 'RecentFiles' | 'ChooseRunConfiguration' | 'Projects' | 'Branches'
 
 export type FocusTarget = 'editor' | ToolWindowId
 

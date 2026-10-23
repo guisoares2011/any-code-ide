@@ -1,6 +1,6 @@
 import type { AtMention, BridgeStatus, EditorSelection, McpToolResult } from './bridge'
 import type { FixResult, LintResult } from './eslint'
-import type { GitCommandResult, GitCommit, GitCommitDetails, GitLogQuery, GitStatus } from './git'
+import type { GitBranchList, GitCommandResult, GitCommit, GitCommitDetails, GitLogQuery, GitStatus } from './git'
 import type { LanguageServerId } from './languageServers'
 import type { MavenDependenciesResult, MavenModule } from './maven'
 import type { Settings } from './settings'
@@ -99,6 +99,9 @@ export interface InvokeChannels {
   'git:show': { args: [root: string, revision: string, path: string]; result: string | null }
   /** Local and remote branch names. */
   'git:branches': { args: [root: string]; result: string[] }
+  'git:branchList': { args: [root: string]; result: GitBranchList }
+  /** Checks out a local branch, a remote one as a new tracking branch, or (`create`) a new branch at HEAD. */
+  'git:checkout': { args: [root: string, branch: string, mode: 'local' | 'remote' | 'create']; result: GitCommandResult }
   /** Lints a document's text with the project's ESLint. */
   'eslint:lint': { args: [root: string, path: string, text: string]; result: LintResult }
   /** The text with ESLint's fixes applied (Fix ESLint Problems). */
@@ -181,6 +184,8 @@ export const INVOKE_CHANNELS = [
   'git:commitDetails',
   'git:show',
   'git:branches',
+  'git:branchList',
+  'git:checkout',
   'eslint:lint',
   'eslint:fix',
   'eslint:reset',

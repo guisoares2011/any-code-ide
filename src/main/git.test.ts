@@ -3,7 +3,7 @@ import { mkdtemp, readFile, realpath, rename, rm, unlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { branches, commit, commitDetails, fileAtRevision, gitStatus, headContent, log, parsePorcelain, rollback, statusKind } from './git'
+import { branches, branchList, checkout, commit, commitDetails, fileAtRevision, gitStatus, headContent, log, parsePorcelain, parseTrack, rollback, statusKind } from './git'
 
 describe('porcelain parsing', () => {
   it('classifies status columns', () => {
@@ -136,5 +136,35 @@ describe('git operations on a real repository', () => {
     const plain = await realpath(await mkdtemp(join(tmpdir(), 'anycode-plain-')))
     expect(await gitStatus(plain)).toEqual({ repository: false, branch: null, files: [] })
     await rm(plain, { recursive: true, force: true })
+  })
+
+  it('lists branches with tracking info and checks out local, remote and new branches', async () => {
+    sh('branch', 'release')
+    const clone = await realpath(await mkdtemp(join(tmpdir(), 'anycode-clone-')))
+    execFileSync('git', ['clone', '-q', root, clone])
+    const inClone = (...args: string[]) => execFileSync('git', args, { cwd: clone, encoding: 'utf8' })
+    inClone('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'local work')
+
+    const list = await branchList(clone)
+    expect(list.current).toBe('main')
+    expect(list.local).toEqual([{ name: 'main', upstream: 'origin/main', ahead: 1, behind: 0 }])
+    expect(list.remote).toEqual(['origin/main', 'origin/release'])
+
+    expect((await checkout(clone, 'origin/release', 'remote')).ok).toBe(true)
+    expect((await branchList(clone)).local.find((b) => b.name === 'release')?.upstream).toBe('origin/release')
+    expect((await checkout(clone, 'main', 'local')).ok).toBe(true)
+    expect((await checkout(clone, 'origin/release', 'remote')).ok).toBe(true) // reuses the local branch
+    expect((await checkout(clone, 'topic', 'create')).ok).toBe(true)
+    expect((await branchList(clone)).current).toBe('topic')
+    expect((await checkout(clone, 'nope', 'local')).ok).toBe(false)
+    await rm(clone, { recursive: true, force: true })
+  })
+})
+
+describe('upstream tracking', () => {
+  it('parses ahead and behind counts', () => {
+    expect(parseTrack('[ahead 2, behind 1]')).toEqual({ ahead: 2, behind: 1 })
+    expect(parseTrack('[behind 3]')).toEqual({ ahead: 0, behind: 3 })
+    expect(parseTrack('')).toEqual({ ahead: 0, behind: 0 })
   })
 })

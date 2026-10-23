@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { basename, dirname, relativePath } from '@shared/paths'
 import { actionLabel, actions, performAction, shortcutFor, useActions, useActionRegistryVersion } from '../keymap/service'
+import type { GitBranchList } from '@shared/git'
 import type { RecentProject } from '@shared/ipc'
 import { RUN_CONFIGURATION_TYPES, type RunConfigurationSpec } from '@shared/runConfigurations'
 import { openRunConfigurationsEditor, runConfiguration, runState } from '../run/runState'
+import { checkoutBranch } from '../state/git'
 import { openProjectPath, pickAndOpenProject } from '../state/projects'
 import { useStore } from '../state/store'
 import { closePopup, openFile, requestFocus, switchProject, workbench, type PopupKind } from '../state/workbench'
@@ -15,7 +17,7 @@ type Tab = 'All' | 'Files' | 'Actions'
 
 interface Item {
   key: string
-  group: 'Recent Files' | 'Files' | 'Actions' | 'Run Configurations' | 'Open Projects' | 'Recent Projects'
+  group: 'Recent Files' | 'Files' | 'Actions' | 'Run Configurations' | 'Open Projects' | 'Recent Projects' | 'Local' | 'Remote'
   label: string
   hint?: string
   icon?: string
@@ -52,6 +54,7 @@ const TITLES: Record<PopupKind, string> = {
   SearchEverywhere: 'All',
   ChooseRunConfiguration: 'Run',
   Projects: 'Projects',
+  Branches: 'Git Branches',
 }
 
 const PLACEHOLDERS: Record<PopupKind, string> = {
@@ -61,6 +64,7 @@ const PLACEHOLDERS: Record<PopupKind, string> = {
   SearchEverywhere: 'Search files and actions',
   ChooseRunConfiguration: 'Run configuration',
   Projects: 'Open or switch project',
+  Branches: 'Search branches or type a new branch name',
 }
 
 function initialTab(kind: PopupKind): Tab {
@@ -78,10 +82,12 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
   const runConfigurations = useStore(runState, (s) => s.configurations)
   const openProjects = useStore(workbench, (s) => s.projects)
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
+  const [branches, setBranches] = useState<GitBranchList>({ current: null, local: [], remote: [] })
 
   useEffect(() => {
     if (kind === 'Projects') void window.anycode.invoke('project:recent').then(setRecentProjects)
-  }, [kind])
+    if (kind === 'Branches' && project) void window.anycode.invoke('git:branchList', project.root).then(setBranches)
+  }, [kind, project])
   const registryVersion = useActionRegistryVersion()
   const [query, setQuery] = useState('')
   const [files, setFiles] = useState<string[]>([])
@@ -159,6 +165,60 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
       }
       return result
     }
+    if (kind === 'Branches') {
+      const name = query.trim()
+      const exists = branches.local.some((b) => b.name === name) || branches.remote.includes(name)
+      // Like IntelliJ's branches popup: a typed name that matches no branch can be created right away.
+      if (name && !exists && /^[^\s~^:?*[\\]+$/.test(name)) {
+        result.push({
+          key: 'create',
+          group: 'Actions',
+          label: `Create new branch '${name}'`,
+          icon: 'general/add',
+          positions: [],
+          labelOffset: 0,
+          run: () => void checkoutBranch(name, 'create'),
+        })
+      }
+      if (!name) {
+        for (const id of ['CheckinProject', 'Vcs.Push']) {
+          const action = actions.get(id)
+          if (action) {
+            result.push({ key: `action:${id}`, group: 'Actions', label: actionLabel(action), shortcut: shortcutFor(id), positions: [], labelOffset: 0, run: () => performAction(id) })
+          }
+        }
+      }
+      // The current branch first, as IntelliJ lists it.
+      const local = [...branches.local].sort((a, b) => Number(b.name === branches.current) - Number(a.name === branches.current))
+      for (const { item, match } of rank(query, local, (b) => b.name)) {
+        const track = [item.ahead ? `↑${item.ahead}` : '', item.behind ? `↓${item.behind}` : ''].filter(Boolean).join(' ')
+        const current = item.name === branches.current
+        result.push({
+          key: `local:${item.name}`,
+          group: 'Local',
+          label: item.name,
+          hint: [current ? 'current' : '', item.upstream ?? '', track].filter(Boolean).join(' · '),
+          icon: 'general/vcs',
+          positions: match.positions,
+          labelOffset: 0,
+          run: () => {
+            if (!current) void checkoutBranch(item.name, 'local')
+          },
+        })
+      }
+      for (const { item, match } of rank(query, branches.remote, (b) => b)) {
+        result.push({
+          key: `remote:${item}`,
+          group: 'Remote',
+          label: item,
+          icon: 'general/vcs',
+          positions: match.positions,
+          labelOffset: 0,
+          run: () => void checkoutBranch(item, 'remote'),
+        })
+      }
+      return result
+    }
     if (kind === 'ChooseRunConfiguration') {
       for (const { item, match } of rank(query, runConfigurations, (c) => c.name)) {
         result.push({
@@ -215,7 +275,7 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
     }
     return result
     // registryVersion: re-rank when actions change
-  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, recentProjects, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, recentProjects, branches, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     listRef.current?.querySelector('.popup-item.selected')?.scrollIntoView({ block: 'nearest' })
@@ -297,7 +357,7 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
         <div className="popup-list" ref={listRef} role="listbox">
           {items.length === 0 && query !== '' && <div className="popup-empty">Nothing found</div>}
           {items.map((item, index) => {
-            const header = item.group !== lastGroup && (kind === 'SearchEverywhere' || kind === 'Projects') ? item.group : null
+            const header = item.group !== lastGroup && (kind === 'SearchEverywhere' || kind === 'Projects' || kind === 'Branches') ? item.group : null
             lastGroup = item.group
             return (
               <div key={item.key}>

@@ -1,7 +1,7 @@
 import { closeEditorTab } from '../editor/EditorArea'
 import { saveAll } from '../editor/documents'
 import type { ActionDefinition } from '../keymap/actions'
-import { pushCurrentBranch } from '../state/git'
+import { gitState, pushCurrentBranch } from '../state/git'
 import { closeCurrentProject, pickAndOpenProject } from '../state/projects'
 import {
   activateToolWindow,
@@ -50,6 +50,8 @@ export function workbenchActions(): ActionDefinition[] {
     // ⌘K: the Commit tool window with the message field focused, like IntelliJ's non-modal commit.
     { id: 'CheckinProject', perform: () => showToolWindow('Commit') },
     { id: 'Vcs.Push', perform: () => void pushCurrentBranch() },
+    // The branch widget's popup (git4idea's Git.Branches; no default shortcut on macOS).
+    { id: 'Git.Branches', text: 'Branches…', isEnabled: () => gitState.get().status.repository, perform: () => openPopup('Branches') },
     { id: 'NextProjectWindow', isEnabled: () => workbench.get().projects.length > 1, perform: () => cycleProject(1) },
     { id: 'PreviousProjectWindow', isEnabled: () => workbench.get().projects.length > 1, perform: () => cycleProject(-1) },
     { id: '$LRU', text: 'Recent Projects', perform: () => openPopup('Projects') },

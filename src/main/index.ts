@@ -5,7 +5,7 @@ import { createBridge, failPendingToolCalls } from './bridge'
 import { registerFsHandlers } from './fs'
 import { registerEslintHandlers, stopAllEslint, stopEslint } from './eslint/index'
 import { registerGitHandlers } from './git'
-import { currentSettings, registerSettingsHandlers } from './settings'
+import { currentSettings, registerSettingsHandlers, userShell } from './settings'
 import { emit, handle, onSend } from './ipc'
 import { registerLspHandlers, stopAllLanguageServers } from './lsp/manager'
 import { homedir } from 'node:os'
@@ -13,6 +13,7 @@ import { closeProject, explicitProject, openProject, openRoots } from './project
 import { mergeRecent, OpenProjectsStore, readJetBrainsRecent, RecentProjectsStore } from './recentProjects'
 import { killAllPtys, registerPtyHandlers } from './pty'
 import { registerRunHandlers } from './runConfigurations/index'
+import { adoptShellEnv } from './shellEnv'
 import { watchProject } from './watcher'
 
 /**
@@ -178,6 +179,8 @@ if (exitAfterScreenshot) {
 }
 
 void app.whenReady().then(async () => {
+  // Before any terminal, language server or build starts: they all need the user's PATH.
+  await adoptShellEnv(userShell())
   try {
     await bridge.start()
   } catch (error) {

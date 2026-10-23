@@ -68,3 +68,13 @@ export async function pushCurrentBranch(): Promise<void> {
   if (result.ok) notify('info', 'Pushed', result.output.split('\n').slice(-1)[0] ?? '')
   else notify('error', 'Push failed', result.output)
 }
+
+/** Git.Branches popup: checks out a branch (or creates one) and reports git's error, if any. */
+export async function checkoutBranch(branch: string, mode: 'local' | 'remote' | 'create'): Promise<void> {
+  const root = workbench.get().project?.root
+  if (!root) return
+  const result = await window.anycode.invoke('git:checkout', root, branch, mode)
+  await refreshGit()
+  if (!result.ok) notify('error', mode === 'create' ? `Could not create branch ${branch}` : `Could not check out ${branch}`, result.output)
+  else notify('info', mode === 'create' ? `Created and checked out ${branch}` : `Checked out ${gitState.get().status.branch ?? branch}`, '')
+}

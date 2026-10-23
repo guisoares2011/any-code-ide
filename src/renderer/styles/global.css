@@ -418,6 +418,16 @@ button {
   text-overflow: ellipsis;
 }
 
+/* Module content roots, as in IntelliJ: bold, with "[module]" when the name differs from the directory. */
+.tree-row .module-root,
+.tree-row .module-name {
+  font-weight: 600;
+}
+
+.tree-row .module-name {
+  margin-left: 4px;
+}
+
 /* ── Editor ─────────────────────────────────────────────────────────────── */
 
 .editor-tabs {

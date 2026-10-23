@@ -18,6 +18,14 @@ export interface GitStatus {
   files: GitFileStatus[]
 }
 
+/** Branches for the VCS widget's popup (Git.Branches). */
+export interface GitBranchList {
+  current: string | null
+  local: { name: string; upstream?: string; ahead: number; behind: number }[]
+  /** Remote-tracking branches, e.g. "origin/main" (without origin/HEAD). */
+  remote: string[]
+}
+
 export interface GitCommandResult {
   ok: boolean
   output: string

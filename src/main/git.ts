@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { GitChangedFile, GitCommandResult, GitCommit, GitCommitDetails, GitFileStatus, GitLogQuery, GitStatus } from '@shared/git'
+import type { GitBranchList, GitChangedFile, GitCommandResult, GitCommit, GitCommitDetails, GitFileStatus, GitLogQuery, GitStatus } from '@shared/git'
 import { handle } from './ipc'
 import { assertInsideProject } from './project'
 
@@ -238,6 +238,34 @@ export async function branches(root: string): Promise<string[]> {
   return (output ?? '').split('\n').filter((name) => name && !name.endsWith('/HEAD'))
 }
 
+/** `%(upstream:track)` → ahead/behind counts, e.g. "[ahead 2, behind 1]". */
+export function parseTrack(track: string): { ahead: number; behind: number } {
+  return { ahead: Number(/ahead (\d+)/.exec(track)?.[1] ?? 0), behind: Number(/behind (\d+)/.exec(track)?.[1] ?? 0) }
+}
+
+export async function branchList(root: string): Promise<GitBranchList> {
+  const format = '%(refname)%00%(refname:short)%00%(upstream:short)%00%(upstream:track)'
+  const output = (await git(root, ['for-each-ref', `--format=${format}`, 'refs/heads', 'refs/remotes'])) ?? ''
+  const result: GitBranchList = { current: await currentBranch(root), local: [], remote: [] }
+  for (const line of output.split('\n')) {
+    const [ref, name, upstream, track] = line.split('\0')
+    if (!ref || !name) continue
+    if (ref.startsWith('refs/heads/')) result.local.push({ name, ...(upstream ? { upstream } : {}), ...parseTrack(track ?? '') })
+    else if (!ref.endsWith('/HEAD')) result.remote.push(name)
+  }
+  return result
+}
+
+/** Git.Branches: checkout of a local branch, a remote branch (new local tracking branch) or a new branch. */
+export async function checkout(root: string, branch: string, mode: 'local' | 'remote' | 'create'): Promise<GitCommandResult> {
+  if (mode === 'create') return gitCommand(root, ['checkout', '-b', branch])
+  if (mode === 'local') return gitCommand(root, ['checkout', branch])
+  // origin/feature → feature; an existing local branch of that name is checked out instead.
+  const local = branch.slice(branch.indexOf('/') + 1)
+  const exists = (await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${local}`])) !== null
+  return gitCommand(root, exists ? ['checkout', local] : ['checkout', '--track', '-b', local, branch])
+}
+
 export function registerGitHandlers(): void {
   handle('git:branch', (root) => currentBranch(assertInsideProject(root)))
   handle('git:status', (root) => gitStatus(assertInsideProject(root)))
@@ -249,4 +277,6 @@ export function registerGitHandlers(): void {
   handle('git:commitDetails', (root, hash) => commitDetails(assertInsideProject(root), hash))
   handle('git:show', (root, revision, path) => fileAtRevision(assertInsideProject(root), revision, assertInsideProject(path)))
   handle('git:branches', (root) => branches(assertInsideProject(root)))
+  handle('git:branchList', (root) => branchList(assertInsideProject(root)))
+  handle('git:checkout', (root, branch, mode) => checkout(assertInsideProject(root), branch, mode))
 }

@@ -16,6 +16,7 @@ import { applyPendingReveal, openDocument, releaseDocument, revealRequests, type
 import { editorActions, sendSelectionToClaude } from './editorActions'
 import { setupMonaco, THEME_NAME } from './monacoSetup'
 import { editorFont, settingsState } from '../state/settings'
+import { attachBreakpointGutter } from '../debug/editorDebug'
 
 /** Closing a Claude diff tab rejects the proposal; closing a file tab releases its document. */
 export function closeEditorTab(tab: EditorTab): void {
@@ -189,6 +190,8 @@ function MonacoHost({ path }: { path: string }) {
       ...editorFont(),
       fontLigatures: false,
       minimap: { enabled: false },
+      // Breakpoints and the execution point.
+      glyphMargin: true,
       scrollBeyondLastLine: false,
       renderLineHighlight: 'all',
       guides: { indentation: true },
@@ -202,9 +205,11 @@ function MonacoHost({ path }: { path: string }) {
       workbench.set({ caret: { line: event.position.lineNumber, column: event.position.column } }),
     )
     const selection = created.onDidChangeCursorSelection(() => trackSelection(created))
+    const gutter = attachBreakpointGutter(created)
     return () => {
       caret.dispose()
       selection.dispose()
+      gutter.dispose()
       created.dispose()
       instance.current = null
     }

@@ -4,6 +4,10 @@ import { PopupHost } from '../popups/SearchPopup'
 import { RunConfigurationsDialog } from '../run/RunConfigurationsDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
 import { VcsActions } from '../vcs/VcsActions'
+import { ScratchActions } from '../scratch/ScratchActions'
+import { DebugActions } from '../debug/DebugActions'
+import { ContextMenuHost } from '../ui/ContextMenu'
+import { DialogHost } from '../ui/dialogs'
 import { useStore } from '../state/store'
 import { setPanelSize, workbench } from '../state/workbench'
 import { OpenProjectDialog } from './OpenProjectDialog'
@@ -79,6 +83,10 @@ export function Workbench() {
       <VcsActions />
       <OpenProjectDialog />
       <SettingsDialog />
+      <ScratchActions />
+      <DebugActions />
+      <DialogHost />
+      <ContextMenuHost />
     </div>
   )
 }

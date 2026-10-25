@@ -104,13 +104,19 @@ describe('LspRouter', () => {
     expect(client.at(-1)).toMatchObject({ id: 3 })
   })
 
-  it('keeps its own requests away from the client', async () => {
+  it('keeps its own requests away from the client, sent once the server is initialized', async () => {
     const { router, server, client } = setup()
     const symbols = router.request<string[]>('textDocument/documentSymbol', {})
-    const id = server[0]!.id
+    await Promise.resolve()
+    expect(server).toHaveLength(0)
+    router.fromClient({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { capabilities: {} } })
+    router.fromServer({ jsonrpc: '2.0', id: 1, result: { capabilities: {} } })
+    await router.ready
+    await Promise.resolve()
+    const id = server.at(-1)!.id
     router.fromServer({ jsonrpc: '2.0', id, result: ['s'] })
     expect(await symbols).toEqual(['s'])
-    expect(client).toHaveLength(0)
+    expect(client).toHaveLength(1) // only the initialize response
   })
 
   it('scopes dynamic registrations to the server languages', () => {

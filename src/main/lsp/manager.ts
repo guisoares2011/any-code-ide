@@ -9,6 +9,8 @@ import { emit, handle, handleFrom, onSend } from '../ipc'
 import { assertInsideProject } from '../project'
 import { encodeMessage, MessageReader } from './framing'
 import { serverCommand, serverLocation } from './servers'
+import { javaDebugJar } from '../debug/index'
+import { withJavaDebugBundle } from '../debug/adapters'
 
 interface Session {
   id: string
@@ -91,6 +93,8 @@ export function registerLspHandlers(): void {
     const session = sessions.get(sessionId)
     if (!session?.process.stdin.writable) return
     traceMessage(session.server, '->', message)
-    session.process.stdin.write(encodeMessage(message))
+    // java-debug rides on jdtls as a plugin bundle, announced in initialize.
+    const outgoing = session.server === 'java' ? withJavaDebugBundle(message, javaDebugJar()) : message
+    session.process.stdin.write(encodeMessage(outgoing))
   })
 }

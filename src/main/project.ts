@@ -4,6 +4,8 @@ import type { ProjectInfo } from '@shared/ipc'
 import { basename, isInside } from '@shared/paths'
 
 const roots = new Set<string>()
+/** Directories outside any project that file access may also reach (scratch files). */
+const extraRoots = new Set<string>()
 
 function asProject(path: string): ProjectInfo | null {
   try {
@@ -41,10 +43,15 @@ export function openRoots(): string[] {
   return [...roots]
 }
 
-/** Throws unless `path` lies inside one of the opened project roots. */
+/** Lets file access reach a directory that is not a project (the scratches directory). */
+export function allowRoot(path: string): void {
+  extraRoots.add(resolve(path))
+}
+
+/** Throws unless `path` lies inside one of the opened project roots (or an allowed directory). */
 export function assertInsideProject(path: string): string {
   const absolute = resolve(path)
-  for (const root of roots) {
+  for (const root of [...roots, ...extraRoots]) {
     if (isInside(root, absolute)) return absolute
   }
   throw new Error(`Path outside of the opened projects: ${absolute}`)

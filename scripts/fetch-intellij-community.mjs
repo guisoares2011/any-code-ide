@@ -51,7 +51,7 @@ const FILES = [
   `${PLATFORM_RESOURCES}/themes/darcula.theme.json`,
   `${PLATFORM_RESOURCES}/DefaultColorSchemesManager.xml`, // bundled "Default" and "Darcula" editor schemes
   // tool window stripe icons (20x20 in the New UI stripes)
-  ...['project', 'commit', 'structure', 'vcs', 'problems', 'notifications', 'run', 'services', 'find'].flatMap(
+  ...['project', 'commit', 'structure', 'vcs', 'problems', 'notifications', 'run', 'debug', 'services', 'find'].flatMap(
     toolWindowIcon,
   ),
   // general UI icons
@@ -131,6 +131,44 @@ const FILES = [
     'fileTypes/editorConfig',
     'fileTypes/csv',
     'fileTypes/sourceMap',
+    // project view context menu and scratch files
+    'general/cut',
+    'general/paste',
+    'general/delete',
+    'general/open',
+    'general/selectIn',
+    'actions/addFile',
+    'actions/newFolder',
+    'fileTypes/scratch',
+    'fileTypes/scratches',
+    // debugger: toolbar, breakpoints, frames and variables
+    'run/resume',
+    'run/pause',
+    'run/stepOver',
+    'run/stepInto',
+    'run/stepOut',
+    'run/runToCursor',
+    'run/evaluateExpression',
+    'run/muteBreakpoints',
+    'run/viewBreakpoints',
+    'run/restartDebug',
+    'run/showCurrentFrame',
+    'breakpoints/breakpoint',
+    'breakpoints/breakpointDisabled',
+    'breakpoints/breakpointValid',
+    'breakpoints/breakpointInvalid',
+    'breakpoints/breakpointMuted',
+    'debugger/frame',
+    'debugger/threads',
+    'debugger/threadCurrent',
+    'debugger/threadAtBreakpoint',
+    'debugger/threadRunning',
+    'debugger/dbPrimitive',
+    'debugger/dbObject',
+    'debugger/dbArray',
+    'debugger/evaluationResult',
+    'debugger/nextStatement',
+    'debugger/watch',
   ].flatMap(icon),
 ]
 

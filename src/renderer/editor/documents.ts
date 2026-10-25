@@ -142,3 +142,40 @@ export function applyPendingReveal(path: string, instance: editor.ICodeEditor): 
   instance.setSelection(range)
   instance.revealRangeInCenterIfOutsideViewport(range)
 }
+
+/**
+ * A file or directory was renamed or moved: open documents below `from` follow it to `to`, keeping
+ * unsaved edits. Monaco models cannot change URI, so each gets a new model with the same text.
+ */
+export async function relocateDocuments(from: string, to: string): Promise<void> {
+  const monaco = setupMonaco()
+  for (const [path, promise] of [...documents]) {
+    if (path !== from && !path.startsWith(`${from}/`)) continue
+    const target = to + path.slice(from.length)
+    const entry = await promise
+    documents.delete(path)
+    loaded.delete(path)
+    if (entry.state.kind !== 'text') continue
+    const old = entry.state.model
+    const wasDirty = old.getAlternativeVersionId() !== entry.savedVersion
+    const model = monaco.editor.createModel(old.getValue(), languageForFile(basename(target)), monaco.Uri.file(target))
+    old.dispose()
+    // A dirty document stays dirty until it is saved again.
+    const moved: Entry = { state: { kind: 'text', model }, savedVersion: wasDirty ? -1 : model.getAlternativeVersionId() }
+    model.onDidChangeContent(() => setDirty(target, model.getAlternativeVersionId() !== moved.savedVersion))
+    documents.set(target, Promise.resolve(moved))
+    loaded.set(target, moved)
+  }
+}
+
+/** Files deleted from the IDE: their tabs close and unsaved edits are dropped. */
+export async function discardDocuments(paths: readonly string[]): Promise<void> {
+  const under = (path: string): boolean => paths.some((p) => path === p || path.startsWith(`${p}/`))
+  for (const tab of workbench.get().tabs.filter((t) => t.kind === 'file' && under(t.path))) closeTab(tab.path)
+  for (const path of [...documents.keys()].filter(under)) {
+    const entry = await documents.get(path)
+    if (entry?.state.kind === 'text') entry.state.model.dispose()
+    documents.delete(path)
+    loaded.delete(path)
+  }
+}

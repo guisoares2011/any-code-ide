@@ -4,7 +4,7 @@ import type { GitBranchList, GitCommandResult, GitCommit, GitCommitDetails, GitL
 import type { LanguageServerId } from './languageServers'
 import type { MavenDependenciesResult, MavenModule } from './maven'
 import type { Settings } from './settings'
-import type { RunCommand, RunConfigurationSpec } from './runConfigurations'
+import type { JvmDebug, RunCommand, RunConfigurationSpec } from './runConfigurations'
 
 // IPC contract shared by main, preload and renderer. Every channel is declared here once;
 // the preload only forwards channels listed in these constants.
@@ -94,6 +94,25 @@ export interface InvokeChannels {
   'fs:readDataUrl': { args: [path: string]; result: string | null }
   /** Files of a project root, relative to it (git ls-files when available). */
   'fs:listFiles': { args: [root: string]; result: string[] }
+  'fs:exists': { args: [path: string]; result: boolean }
+  /** New file with its missing parent directories; fails when it exists. */
+  'fs:createFile': { args: [path: string, content?: string]; result: void }
+  'fs:createDirectory': { args: [path: string]; result: void }
+  'fs:rename': { args: [from: string, to: string]; result: void }
+  /** Paste after Copy: copies into a directory (free "name copy" names); returns the new paths. */
+  'fs:copyInto': { args: [sources: string[], dir: string]; result: string[] }
+  /** Paste after Cut: moves into a directory; returns the new paths. */
+  'fs:moveInto': { args: [sources: string[], dir: string]; result: string[] }
+  /** Delete: moves files and directories to the Trash. */
+  'fs:trash': { args: [paths: string[]]; result: void }
+  /** Reveal in Finder. */
+  'shell:reveal': { args: [path: string]; result: void }
+  /** Open in Associated Application; returns an error message, "" on success. */
+  'shell:openPath': { args: [path: string]; result: string }
+  /** The scratches directory (created on demand). */
+  'scratch:dir': { args: []; result: string }
+  /** New scratch file (scratch.<ext>, scratch_1.<ext>...); returns its path. */
+  'scratch:create': { args: [extension: string, content?: string]; result: string }
   /** Current branch name, a short commit hash when detached, or null outside a git work tree. */
   'git:branch': { args: [root: string]; result: string | null }
   'git:status': { args: [root: string]; result: GitStatus }
@@ -130,8 +149,8 @@ export interface InvokeChannels {
   /** Saves privately or as .run/<name>.run.xml; returns the configuration with its new id/origin. */
   'run:save': { args: [root: string, spec: RunConfigurationSpec, asProjectFile: boolean]; result: RunConfigurationSpec }
   'run:delete': { args: [root: string, id: string]; result: void }
-  /** The shell script, directory and environment that run a configuration. */
-  'run:command': { args: [root: string, spec: RunConfigurationSpec]; result: RunCommand }
+  /** The shell script, directory and environment that run a configuration; with `debug`, the JVM waits for a debugger. */
+  'run:command': { args: [root: string, spec: RunConfigurationSpec, debug?: JvmDebug]; result: RunCommand }
   'maven:modules': { args: [root: string]; result: MavenModule[] }
   /** Runs `dependency:tree` for the whole reactor (slow: starts Maven). */
   'maven:dependencies': { args: [root: string]; result: MavenDependenciesResult }
@@ -142,6 +161,17 @@ export interface InvokeChannels {
   'lsp:start': { args: [server: LanguageServerId, root: string]; result: string | null }
   /** Install location of each language server, or null when it is not installed. */
   'lsp:locations': { args: []; result: Record<LanguageServerId, string | null> }
+  /** Installed debug adapters: java-debug's jar and js-debug's server script, or null. */
+  'debug:adapters': { args: []; result: { java: string | null; node: string | null } }
+  /** Starts (or reuses) this window's js-debug server; returns its port. */
+  'debug:startNodeAdapter': { args: []; result: number }
+  /** Opens a DAP connection to an adapter on 127.0.0.1; returns the connection id. */
+  'debug:connect': { args: [port: number]; result: string }
+  'debug:disconnect': { args: [id: string]; result: void }
+  /** A free loopback port (JDWP address of a debugged JVM). */
+  'debug:freePort': { args: []; result: number }
+  /** Resolves true once a process listens on the port (checked without connecting), false after the timeout. */
+  'debug:waitForListener': { args: [port: number, timeoutMs: number]; result: boolean }
   'settings:get': { args: []; result: Settings }
   /** Saves the settings; returns them as stored (normalized). */
   'settings:set': { args: [settings: Settings]; result: Settings }
@@ -160,6 +190,8 @@ export interface SendChannels {
   'bridge:atMentioned': [mention: AtMention]
   /** A JSON-RPC message for a language server session. */
   'lsp:send': [sessionId: string, message: unknown]
+  /** A Debug Adapter Protocol message for a debug connection. */
+  'debug:send': [id: string, message: unknown]
 }
 
 /** Events: main -> renderer via webContents.send. */
@@ -175,6 +207,9 @@ export interface EventChannels {
   'project:reveal': [root: string]
   'lsp:message': [sessionId: string, message: unknown]
   'lsp:exit': [sessionId: string, code: number | null]
+  'debug:message': [id: string, message: unknown]
+  /** The adapter closed a debug connection. */
+  'debug:closed': [id: string]
 }
 
 export const INVOKE_CHANNELS = [
@@ -194,6 +229,17 @@ export const INVOKE_CHANNELS = [
   'fs:writeFile',
   'fs:listFiles',
   'fs:readDataUrl',
+  'fs:exists',
+  'fs:createFile',
+  'fs:createDirectory',
+  'fs:rename',
+  'fs:copyInto',
+  'fs:moveInto',
+  'fs:trash',
+  'shell:reveal',
+  'shell:openPath',
+  'scratch:dir',
+  'scratch:create',
   'git:branch',
   'git:status',
   'git:headContent',
@@ -224,13 +270,19 @@ export const INVOKE_CHANNELS = [
   'bridge:status',
   'lsp:start',
   'lsp:locations',
+  'debug:adapters',
+  'debug:startNodeAdapter',
+  'debug:connect',
+  'debug:disconnect',
+  'debug:freePort',
+  'debug:waitForListener',
   'settings:get',
   'settings:set',
 ] as const satisfies readonly (keyof InvokeChannels)[]
 
-export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'window:cycle', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send'] as const satisfies readonly (keyof SendChannels)[]
+export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'window:cycle', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send', 'debug:send'] as const satisfies readonly (keyof SendChannels)[]
 
-export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'project:reveal', 'lsp:message', 'lsp:exit'] as const satisfies readonly (keyof EventChannels)[]
+export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'project:reveal', 'lsp:message', 'lsp:exit', 'debug:message', 'debug:closed'] as const satisfies readonly (keyof EventChannels)[]
 
 export type InvokeChannel = keyof InvokeChannels
 export type InvokeArgs<C extends InvokeChannel> = InvokeChannels[C]['args']

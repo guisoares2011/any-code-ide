@@ -74,3 +74,12 @@ Os atalhos abaixo vêm de `reference/jetbrains/derived/actions-catalog.mac.json`
   - ícone próprio do AnyCode (sem marcas da JetBrains): gerar o PNG 1024 em modo headless e converter com `iconutil`;
   - `THIRD_PARTY_NOTICES.md` incluído no bundle.
 - **Assinatura e notarização dependem do usuário:** é preciso um certificado "Developer ID Application" no Keychain (`security find-identity -v -p codesigning`) e credenciais de notarização (perfil `notarytool`). Sem eles, gerar o `.app` com assinatura ad-hoc e **perguntar** antes de qualquer passo com credenciais.
+
+## 7. Árvore, Scratch Files e debugger
+
+- [x] **Feito** (2026-10-24). Menu de contexto da árvore, Scratch Files e debugger DAP (Java/Spring Boot/JUnit via java-debug no jdtls; npm e scripts Node via js-debug). Detalhes nas seções próprias do `CLAUDE.md`.
+- Próximos passos possíveis:
+  - breakpoints em Kotlin: o java-debug só mapeia fontes Java; seria preciso calcular a classe (`<Arquivo>Kt` ou a classe da linha) e usar breakpoints por classe/linha;
+  - watches, breakpoints condicionais e de exceção (DAP já suporta: `setBreakpoints` com `condition`, `setExceptionBreakpoints` com filtros);
+  - debug de configurações Maven/Gradle genéricas (`MAVEN_OPTS` com o agente JDWP) e attach a um processo já em execução;
+  - seleção múltipla e arrastar e soltar na árvore.

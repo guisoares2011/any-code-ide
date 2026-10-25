@@ -1561,3 +1561,297 @@ button {
   font: inherit;
   color: var(--c-text-secondary);
 }
+
+/* ── Context menus ──────────────────────────────────────────────────────── */
+
+.context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 220px;
+  max-width: 420px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-container-popup-bg);
+  border: 1px solid var(--c-container-popup-border);
+  border-radius: var(--island-radius);
+  box-shadow: 0 8px 28px var(--c-transparent-black-40);
+  outline: none;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--component-radius);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.context-menu-item.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.context-menu-item.disabled {
+  color: var(--c-text-muted);
+}
+
+.context-menu-item.disabled img {
+  opacity: 0.4;
+}
+
+.context-menu-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+}
+
+.context-menu-label {
+  flex: 1;
+}
+
+.context-menu-item .shortcut {
+  margin-left: 24px;
+  color: var(--c-text-secondary);
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--c-container-popup-border);
+}
+
+.tree-row.cut > span,
+.tree-row.cut > img {
+  opacity: 0.5;
+}
+
+/* ── Input and confirmation dialogs ─────────────────────────────────────── */
+
+.input-dialog,
+.confirm-dialog {
+  width: min(420px, 92vw);
+}
+
+.input-dialog .dialog-body,
+.confirm-dialog .dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+
+.confirm-dialog .dialog-body p {
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+
+.text-field.invalid {
+  border-color: var(--c-control-error-border);
+}
+
+.field-error {
+  color: var(--c-text-error);
+  font-size: var(--font-size-small);
+}
+
+.input-dialog-choices {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+/* ── Debugger ───────────────────────────────────────────────────────────── */
+
+.monaco-editor .debug-breakpoint-glyph {
+  background: var(--icon-breakpoint) center / 14px 14px no-repeat;
+  cursor: pointer;
+}
+
+.monaco-editor .debug-breakpoint-glyph.valid {
+  background-image: var(--icon-breakpoint-valid);
+}
+
+.monaco-editor .debug-breakpoint-glyph.disabled {
+  background-image: var(--icon-breakpoint-disabled);
+}
+
+.monaco-editor .debug-breakpoint-glyph.invalid {
+  background-image: var(--icon-breakpoint-invalid);
+}
+
+.monaco-editor .debug-breakpoint-glyph.muted {
+  background-image: var(--icon-breakpoint-muted);
+}
+
+.monaco-editor .debug-breakpoint-line {
+  background: var(--debug-breakpoint-line);
+}
+
+.monaco-editor .debug-execution-line {
+  background: var(--debug-execution-line);
+}
+
+.monaco-editor .debug-frame-line {
+  background: var(--debug-execution-line);
+  opacity: 0.5;
+}
+
+.monaco-editor .debug-execution-glyph {
+  background: var(--icon-execution-point) center / 12px 12px no-repeat;
+}
+
+.debug-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.debug-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  min-height: 32px;
+}
+
+.debug-toolbar .icon-button.selected {
+  background: var(--c-toolbar-selected-bg);
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--c-container-popup-border);
+}
+
+.debug-message {
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 4px;
+}
+
+.debug-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.debug-panes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.debug-console-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.debug-frames {
+  width: 38%;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--c-container-popup-border);
+}
+
+.debug-thread {
+  margin: 0 8px 6px;
+}
+
+.debug-frame-list {
+  flex: 1;
+  overflow: auto;
+  outline: none;
+}
+
+.debug-frame {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--row-height);
+  margin: 0 8px;
+  padding: 0 6px;
+  border-radius: var(--component-radius);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.debug-frame.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.debug-frame.library .debug-frame-name {
+  color: var(--c-text-muted);
+}
+
+.debug-frame-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-pad {
+  padding: 6px 14px;
+}
+
+.debug-variables {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.debug-evaluate {
+  margin: 0 8px 6px;
+}
+
+.debug-variable-tree {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.debug-variable-name {
+  color: var(--c-text-default);
+}
+
+.debug-variable-value {
+  color: var(--c-text-secondary);
+}
+
+.debug-result .debug-variable-name {
+  font-weight: 600;
+}
+
+.breakpoints-dialog {
+  width: min(640px, 92vw);
+  max-height: min(520px, 80vh);
+}
+
+.breakpoints-list {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+
+.breakpoint-location {
+  cursor: default;
+}

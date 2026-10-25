@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { MavenModule } from '@shared/maven'
-import type { JUnitConfiguration, RunCommand, RunConfigurationSpec } from '@shared/runConfigurations'
+import { jdwpAgent, type JUnitConfiguration, type JvmDebug, type RunCommand, type RunConfigurationSpec } from '@shared/runConfigurations'
 import { moduleOfClass } from '../maven/pom'
 import { shellQuote } from '../pty'
 
@@ -23,7 +23,10 @@ const words = (text: string): string[] => text.split(/\s+/).filter(Boolean)
 /** `-Dname=value` with the value quoted for the shell. */
 const property = (name: string, value: string): string => shellQuote(`-D${name}=${value}`)
 
-export function runCommand(spec: RunConfigurationSpec, context: CommandContext): RunCommand {
+/** Gradle's --debug-jvm makes the test JVM wait for a debugger on this port. */
+const GRADLE_DEBUG_PORT = 5005
+
+export function runCommand(spec: RunConfigurationSpec, context: CommandContext, debug?: JvmDebug): RunCommand {
   const cwd = spec.workingDirectory ? join(context.root, spec.workingDirectory) : context.root
   const mvn = shellQuote(context.maven)
   let script: string
@@ -37,11 +40,13 @@ export function runCommand(spec: RunConfigurationSpec, context: CommandContext):
       // A directory, or an IntelliJ module name (imported configurations) resolved to one.
       const byDirectory = context.reactor.some((m) => m.directory === spec.module)
       const module = byDirectory ? spec.module : moduleOfClass(context.root, context.reactor, spec.mainClass, spec.module)
+      // Debugging: the application JVM (spring-boot:run forks it) waits for java-debug to attach.
+      const jvmArguments = [debug && jdwpAgent(debug.port), spec.vmOptions.trim()].filter(Boolean).join(' ')
       const run = [
         `${mvn}${module ? ` -pl ${shellQuote(module)}` : ''} spring-boot:run`,
         property('spring-boot.run.main-class', spec.mainClass),
         spec.activeProfiles.trim() && property('spring-boot.run.profiles', spec.activeProfiles.trim()),
-        spec.vmOptions.trim() && property('spring-boot.run.jvmArguments', spec.vmOptions.trim()),
+        jvmArguments && property('spring-boot.run.jvmArguments', jvmArguments),
         spec.programArguments.trim() && property('spring-boot.run.arguments', spec.programArguments.trim()),
       ]
         .filter(Boolean)
@@ -49,7 +54,7 @@ export function runCommand(spec: RunConfigurationSpec, context: CommandContext):
       // In a multi-module build the application's sibling modules come from ~/.m2, so they are
       // installed first; a single-module project compiles as part of spring-boot:run.
       script = module ? `${mvn} -q -pl ${shellQuote(module)} -am install -DskipTests && ${run}` : run
-      return { script, cwd: context.root, env: spec.env }
+      return { script, cwd: context.root, env: spec.env, ...(debug ? { debugPort: debug.port } : {}) }
     }
     case 'npm': {
       const extra = spec.arguments.trim() ? ` -- ${words(spec.arguments).map(shellQuote).join(' ')}` : ''
@@ -63,7 +68,12 @@ export function runCommand(spec: RunConfigurationSpec, context: CommandContext):
       script = `${shellQuote(context.gradle)} ${words(spec.tasks).map(shellQuote).join(' ')}`
       break
     case 'junit':
-      return { script: testScript(spec, context), cwd: context.root, env: spec.env }
+      return {
+        script: testScript(spec, context, debug),
+        cwd: context.root,
+        env: spec.env,
+        ...(debug ? { debugPort: context.usesGradle ? GRADLE_DEBUG_PORT : debug.port } : {}),
+      }
   }
   return { script, cwd, env: spec.env }
 }
@@ -88,12 +98,12 @@ function testFilter(spec: JUnitConfiguration, tool: 'maven' | 'gradle'): string 
  * -Dtest (with -am so sibling modules compile, without failing modules that have no match) or
  * Gradle's test task with --tests.
  */
-function testScript(spec: JUnitConfiguration, context: CommandContext): string {
+function testScript(spec: JUnitConfiguration, context: CommandContext, debug?: JvmDebug): string {
   if (context.usesGradle) {
     const byDirectory = spec.module !== '' && existsSync(join(context.root, spec.module))
     const project = byDirectory ? `:${spec.module.replaceAll('/', ':')}:` : ''
     const filter = testFilter(spec, 'gradle')
-    return [shellQuote(context.gradle), `${project}test`, filter && `--tests ${shellQuote(filter)}`].filter(Boolean).join(' ')
+    return [shellQuote(context.gradle), `${project}test`, filter && `--tests ${shellQuote(filter)}`, debug && '--debug-jvm'].filter(Boolean).join(' ')
   }
   // A reactor directory, or an IntelliJ module name (imported configurations) resolved to one.
   const byDirectory = context.reactor.some((m) => m.directory === spec.module)
@@ -105,6 +115,8 @@ function testScript(spec: JUnitConfiguration, context: CommandContext): string {
     'test',
     filter && `${property('test', filter)} -Dsurefire.failIfNoSpecifiedTests=false`,
     spec.vmOptions.trim() && property('argLine', spec.vmOptions.trim()),
+    // Surefire's debugForkedProcess: the forked test JVM waits for the debugger.
+    debug && property('maven.surefire.debug', jdwpAgent(debug.port)),
   ]
     .filter(Boolean)
     .join(' ')

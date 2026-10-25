@@ -6,6 +6,8 @@ import type { ProjectInfo, RecentProject } from '@shared/ipc'
 import { RUN_CONFIGURATION_TYPES, type RunConfigurationSpec } from '@shared/runConfigurations'
 import { openRunConfigurationsEditor, runConfiguration, runState } from '../run/runState'
 import { checkoutBranch } from '../state/git'
+import { changeScratchLanguage, createScratch, loadScratchDir, scratchLanguages } from '../scratch/scratches'
+import type { DirEntry } from '@shared/ipc'
 import { openProjectPath, pickAndOpenProject } from '../state/projects'
 import { useStore } from '../state/store'
 import { closePopup, openFile, requestFocus, switchProject, workbench, type PopupKind } from '../state/workbench'
@@ -17,7 +19,7 @@ type Tab = 'All' | 'Files' | 'Actions'
 
 interface Item {
   key: string
-  group: 'Recent Files' | 'Files' | 'Actions' | 'Run Configurations' | 'Open Projects' | 'Recent Projects' | 'Local' | 'Remote'
+  group: 'Recent Files' | 'Files' | 'Actions' | 'Run Configurations' | 'Open Projects' | 'Recent Projects' | 'Local' | 'Remote' | 'Languages' | 'Scratches'
   label: string
   hint?: string
   icon?: string
@@ -58,6 +60,9 @@ const TITLES: Record<PopupKind, string> = {
   ChooseRunConfiguration: 'Run',
   Projects: 'Projects',
   Branches: 'Git Branches',
+  NewScratchFile: 'New Scratch File',
+  ScratchFiles: 'Scratch Files',
+  ScratchLanguage: 'Change Language',
 }
 
 const PLACEHOLDERS: Record<PopupKind, string> = {
@@ -68,6 +73,9 @@ const PLACEHOLDERS: Record<PopupKind, string> = {
   ChooseRunConfiguration: 'Run configuration',
   Projects: 'Open or switch project',
   Branches: 'Search branches or type a new branch name',
+  NewScratchFile: 'Language of the new scratch file',
+  ScratchFiles: 'Scratch files',
+  ScratchLanguage: 'New language',
 }
 
 function initialTab(kind: PopupKind): Tab {
@@ -87,6 +95,8 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [otherWindows, setOtherWindows] = useState<ProjectInfo[]>([])
   const [branches, setBranches] = useState<GitBranchList>({ current: null, local: [], remote: [] })
+  const [scratches, setScratches] = useState<DirEntry[]>([])
+  const activeTab = useStore(workbench, (s) => s.activeTab)
 
   useEffect(() => {
     if (kind === 'Projects') {
@@ -94,6 +104,11 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
       void window.anycode.invoke('project:otherWindows').then(setOtherWindows)
     }
     if (kind === 'Branches' && project) void window.anycode.invoke('git:branchList', project.root).then(setBranches)
+    if (kind === 'ScratchFiles') {
+      void loadScratchDir()
+        .then((dir) => window.anycode.invoke('fs:readDir', dir))
+        .then((entries) => setScratches(entries.filter((e) => e.kind === 'file')))
+    }
   }, [kind, project])
   const registryVersion = useActionRegistryVersion()
   const [query, setQuery] = useState('')
@@ -239,6 +254,38 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
       }
       return result
     }
+    if (kind === 'NewScratchFile' || kind === 'ScratchLanguage') {
+      for (const { item, match } of rank(query, scratchLanguages(), (l) => l.name)) {
+        result.push({
+          key: `language:${item.extension}`,
+          group: 'Languages',
+          label: item.name,
+          hint: `.${item.extension}`,
+          icon: item.icon,
+          positions: match.positions,
+          labelOffset: 0,
+          run: () => {
+            if (kind === 'NewScratchFile') void createScratch(item)
+            else if (activeTab) void changeScratchLanguage(activeTab, item)
+          },
+        })
+      }
+      return result
+    }
+    if (kind === 'ScratchFiles') {
+      for (const { item, match } of rank(query, scratches, (e) => e.name)) {
+        result.push({
+          key: `scratch:${item.path}`,
+          group: 'Scratches',
+          label: item.name,
+          icon: fileIconName(item.name),
+          positions: match.positions,
+          labelOffset: 0,
+          run: () => openFile(item.path),
+        })
+      }
+      return result
+    }
     if (kind === 'ChooseRunConfiguration') {
       for (const { item, match } of rank(query, runConfigurations, (c) => c.name)) {
         result.push({
@@ -295,7 +342,7 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
     }
     return result
     // registryVersion: re-rank when actions change
-  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, otherWindows, recentProjects, branches, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, files, tab, kind, project, recentFiles, runConfigurations, openProjects, otherWindows, recentProjects, branches, scratches, activeTab, registryVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     listRef.current?.querySelector('.popup-item.selected')?.scrollIntoView({ block: 'nearest' })

@@ -20,6 +20,14 @@ export function applyIslandsDark(root: HTMLElement = document.documentElement): 
     const color = scheme.color(key)
     if (color) root.style.setProperty(`--filestatus-${name}`, color)
   }
+  // Debugger lines: the execution point and lines with a breakpoint.
+  for (const [name, key] of [
+    ['execution-line', 'EXECUTIONPOINT_ATTRIBUTES'],
+    ['breakpoint-line', 'BREAKPOINT_ATTRIBUTES'],
+  ] as const) {
+    const background = scheme.attributes(key)?.background
+    if (background) root.style.setProperty(`--debug-${name}`, background)
+  }
   root.dataset.theme = 'islands-dark'
   root.style.colorScheme = 'dark'
   return theme

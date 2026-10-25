@@ -147,6 +147,12 @@ export async function routerFor(path: string): Promise<LspRouter | null> {
   return (await ensureServer(spec, root))?.router ?? null
 }
 
+/** The server of a language for a project root, started if needed (the debugger asks jdtls for java-debug). */
+export async function languageServerRouter(id: LanguageServerId, root: string): Promise<LspRouter | null> {
+  const spec = LANGUAGE_SERVERS.find((s) => s.id === id)
+  return spec ? ((await ensureServer(spec, root))?.router ?? null) : null
+}
+
 let installed = false
 
 /** Starts servers as documents they own appear, and routes cross-file navigation to tabs. */

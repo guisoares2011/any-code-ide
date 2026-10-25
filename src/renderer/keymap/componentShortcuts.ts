@@ -16,6 +16,9 @@ export const COMPONENT_SHORTCUTS: readonly [actionId: string, keystrokes: readon
   ['EditSourceOnEnter', ['ENTER']],
   ['List-selectPreviousRow', ['UP']],
   ['List-selectNextRow', ['DOWN']],
+  // Context menus: → opens a submenu, ← goes back to its parent.
+  ['List-selectNextColumn', ['RIGHT']],
+  ['List-selectPreviousColumn', ['LEFT']],
   ['Commit.Execute', ['control ENTER']],
   ['Popup.Cancel', ['ESCAPE']],
   ['Popup.Confirm', ['ENTER']],

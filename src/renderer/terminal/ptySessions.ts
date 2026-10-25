@@ -35,6 +35,9 @@ interface Session extends SessionInfo {
   element: HTMLDivElement
   ptyId: string | null
   start: SessionStart
+  /** Watchers of the process output (the debugger waits for the JVM's "Listening for transport"). */
+  outputListeners: Set<(data: string) => void>
+  exitListeners: Set<(exitCode: number) => void>
 }
 
 export interface SessionGroupState {
@@ -49,7 +52,12 @@ let counter = 0
 function listen(): void {
   if (listening) return
   listening = true
-  window.anycode.on('pty:data', (ptyId, data) => byPty.get(ptyId)?.session.term.write(data))
+  window.anycode.on('pty:data', (ptyId, data) => {
+    const session = byPty.get(ptyId)?.session
+    if (!session) return
+    session.term.write(data)
+    for (const listener of session.outputListeners) listener(data)
+  })
   window.anycode.on('pty:exit', (exit: PtyExit) => {
     const owner = byPty.get(exit.id)
     if (!owner) return
@@ -94,7 +102,19 @@ export class SessionGroup {
     element.className = 'terminal-session'
     element.style.height = '100%'
     const id = `${this.name}-${++counter}`
-    const session: Session = { id, title: start.title, exited: false, exitCode: null, term, fit, element, ptyId: null, start }
+    const session: Session = {
+      id,
+      title: start.title,
+      exited: false,
+      exitCode: null,
+      term,
+      fit,
+      element,
+      ptyId: null,
+      start,
+      outputListeners: new Set(),
+      exitListeners: new Set(),
+    }
     this.sessions.set(id, session)
     this.store.set({ active: id })
     this.publish()
@@ -174,6 +194,21 @@ export class SessionGroup {
     session.exitCode = exitCode
     session.term.write(`\r\n\x1b[2mProcess finished with exit code ${exitCode}\x1b[0m\r\n`)
     this.publish()
+    for (const listener of session.exitListeners) listener(exitCode)
+  }
+
+  /** Follows a session's output; returns the unsubscribe function. */
+  onOutput(id: string, listener: (data: string) => void): () => void {
+    const session = this.sessions.get(id)
+    session?.outputListeners.add(listener)
+    return () => session?.outputListeners.delete(listener)
+  }
+
+  /** Called when the session's process exits (each time, with Rerun). */
+  onExit(id: string, listener: (exitCode: number) => void): () => void {
+    const session = this.sessions.get(id)
+    session?.exitListeners.add(listener)
+    return () => session?.exitListeners.delete(listener)
   }
 
   /** Types into a session as if the user did (e.g. a command and Enter). */
@@ -300,6 +335,8 @@ export class SessionGroup {
 // (including its claude) while another project is shown.
 const terminalGroups = new Map<string, SessionGroup>()
 const runGroups = new Map<string, SessionGroup>()
+/** Consoles of debugged processes, shown in the Debug tool window. */
+const debugGroups = new Map<string, SessionGroup>()
 const detached = new SessionGroup('none')
 
 function groupFor(groups: Map<string, SessionGroup>, kind: string, root: string | undefined): SessionGroup {
@@ -314,10 +351,12 @@ function groupFor(groups: Map<string, SessionGroup>, kind: string, root: string 
 
 export const terminalGroupFor = (root: string | undefined): SessionGroup => groupFor(terminalGroups, 'terminal', root)
 export const runGroupFor = (root: string | undefined): SessionGroup => groupFor(runGroups, 'run', root)
+export const debugGroupFor = (root: string | undefined): SessionGroup => groupFor(debugGroups, 'debug', root)
 
 /** Groups of the project shown now, for actions that run outside React. */
 export const currentTerminalGroup = (): SessionGroup => terminalGroupFor(workbench.get().project?.root)
 export const currentRunGroup = (): SessionGroup => runGroupFor(workbench.get().project?.root)
+export const currentDebugGroup = (): SessionGroup => debugGroupFor(workbench.get().project?.root)
 
 export function useTerminalGroup(): SessionGroup {
   return terminalGroupFor(useStore(workbench, (s) => s.project?.root))
@@ -327,14 +366,18 @@ export function useRunGroup(): SessionGroup {
   return runGroupFor(useStore(workbench, (s) => s.project?.root))
 }
 
+export function useDebugGroup(): SessionGroup {
+  return debugGroupFor(useStore(workbench, (s) => s.project?.root))
+}
+
 /** Applies a terminal font size to every open session (Settings). */
 export function setTerminalFontSize(size: number): void {
-  for (const group of [...terminalGroups.values(), ...runGroups.values(), detached]) group.setFontSize(size)
+  for (const group of [...terminalGroups.values(), ...runGroups.values(), ...debugGroups.values(), detached]) group.setFontSize(size)
 }
 
 /** Kills every session of a closed project. */
 export function closeProjectSessions(root: string): void {
-  for (const groups of [terminalGroups, runGroups]) {
+  for (const groups of [terminalGroups, runGroups, debugGroups]) {
     const group = groups.get(root)
     if (!group) continue
     for (const session of group.store.get().list) group.close(session.id)

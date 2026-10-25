@@ -82,6 +82,27 @@ describe('run commands', () => {
     expect(runCommand(method, gradle).script).toBe("./gradlew test --tests com.acme.ApiTest.greets")
     expect(runCommand(junit({ scope: 'package', packageName: 'com.acme' }), gradle).script).toBe("./gradlew test --tests 'com.acme.*'")
   })
+
+  it('starts JVMs that wait for the debugger when debugging', () => {
+    const agent = '-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:41234'
+    const app = { ...emptyConfiguration('spring-boot', 'x', 'Api'), mainClass: 'com.acme.Api', vmOptions: '-Xmx1g' } as RunConfigurationSpec
+    expect(runCommand(app, context, { port: 41234 })).toEqual({
+      script: `./mvnw spring-boot:run -Dspring-boot.run.main-class=com.acme.Api '-Dspring-boot.run.jvmArguments=${agent} -Xmx1g'`,
+      cwd: '/p',
+      env: {},
+      debugPort: 41234,
+    })
+    const test = { ...(emptyConfiguration('junit', 'x', 't') as JUnitConfiguration), className: 'com.acme.ApiTest' }
+    expect(runCommand(test, context, { port: 41234 })).toMatchObject({
+      script: `./mvnw test -Dtest=com.acme.ApiTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.surefire.debug=${agent}`,
+      debugPort: 41234,
+    })
+    // Gradle's --debug-jvm has a fixed port.
+    expect(runCommand(test, { ...context, usesGradle: true }, { port: 41234 })).toMatchObject({
+      script: './gradlew test --tests com.acme.ApiTest --debug-jvm',
+      debugPort: 5005,
+    })
+  })
 })
 
 describe('run configuration store', () => {

@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { mkdirSync, statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { app, BrowserWindow, dialog, shell, type WebContents } from 'electron'
@@ -7,11 +7,13 @@ import { basename } from '@shared/paths'
 import { createBridge, failPendingToolCalls, registerBridgeHandlers } from './bridge'
 import type { IdeBridgeServer } from './bridge/server'
 import { registerFsHandlers } from './fs'
+import { registerScratchHandlers } from './scratches'
 import { registerEslintHandlers, stopAllEslint, stopEslint } from './eslint/index'
 import { registerGitHandlers } from './git'
 import { currentSettings, registerSettingsHandlers, userShell } from './settings'
 import { emit, handle, handleFrom, onSendFrom } from './ipc'
 import { registerLspHandlers, stopAllLanguageServers } from './lsp/manager'
+import { registerDebugHandlers, stopDebugging } from './debug/index'
 import { homedir } from 'node:os'
 import { closeProject, explicitProject, openProject } from './project'
 import { mergeRecent, OpenProjectsStore, readJetBrainsRecent, RecentProjectsStore, type SavedWindow } from './recentProjects'
@@ -140,6 +142,7 @@ function closeWindow(entry: ProjectWindow): void {
   failPendingToolCalls(entry.contents, 'The AnyCode window closed')
   killAllPtys(entry.contents)
   stopAllLanguageServers(entry.contents)
+  stopDebugging(entry.contents)
   for (const root of entry.roots) releaseProject(root)
   void entry.bridge.stop()
   if (!quitting && windows.size > 0) persist()
@@ -200,6 +203,8 @@ onSendFrom('project:activated', (sender, root) => {
 })
 registerSettingsHandlers(join(app.getPath('userData'), 'settings.json'))
 registerFsHandlers()
+const scratchesDir = join(app.getPath('userData'), 'scratches')
+registerScratchHandlers(scratchesDir)
 registerGitHandlers()
 registerRunHandlers(app.getPath('userData'))
 registerEslintHandlers()
@@ -217,6 +222,12 @@ function watch(root: string): void {
     }),
   )
 }
+
+// Scratch files belong to no project: every window hears about them.
+mkdirSync(scratchesDir, { recursive: true })
+watchProject(scratchesDir, (paths) => {
+  for (const entry of windows.values()) emit(entry.contents, 'fs:changed', paths)
+})
 
 // Attach: the project joins the asking window.
 handleFrom('project:open', async (sender, path) => {
@@ -307,6 +318,7 @@ handleFrom('project:pickFolder', async (sender) => {
 })
 registerPtyHandlers((owner) => windowOf(owner)?.bridge.terminalEnv() ?? {})
 registerLspHandlers()
+registerDebugHandlers()
 
 let screenshotTaken = false
 onSendFrom('app:rendererReady', (sender) => {
@@ -341,6 +353,7 @@ app.on('before-quit', () => {
   quitting = true
   killAllPtys()
   stopAllLanguageServers()
+  stopDebugging()
   stopAllEslint()
 })
 app.on('will-quit', () => {

@@ -4,6 +4,7 @@ import { useStore } from '../state/store'
 import { openPopup, workbench } from '../state/workbench'
 import { currentRunGroup, useRunGroup } from '../terminal/ptySessions'
 import { Icon } from '../ui/Icon'
+import { canDebug } from '../debug/launch'
 import {
   loadRunConfigurations,
   openRunConfigurationsEditor,
@@ -60,6 +61,14 @@ export function RunWidget() {
         onClick={() => performAction('Run')}
       >
         <Icon name="run/run" />
+      </button>
+      <button
+        className="toolbar-icon debug"
+        title={`Debug '${current?.name ?? ''}' (${shortcutFor('Debug') ?? ''})`}
+        disabled={!canDebug(current)}
+        onClick={() => performAction('Debug')}
+      >
+        <Icon name="run/debug" />
       </button>
       <button
         className={`toolbar-icon${running ? ' stop' : ''}`}

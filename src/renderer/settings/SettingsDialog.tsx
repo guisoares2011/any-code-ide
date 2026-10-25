@@ -269,9 +269,15 @@ const INSTALL_HINT: Partial<Record<LanguageServerId, string>> = {
 
 function LanguageServersPage() {
   const [locations, setLocations] = useState<Record<LanguageServerId, string | null> | null>(null)
+  const [adapters, setAdapters] = useState<{ java: string | null; node: string | null } | null>(null)
   useEffect(() => {
     void window.anycode.invoke('lsp:locations').then(setLocations)
+    void window.anycode.invoke('debug:adapters').then(setAdapters)
   }, [])
+  const debugAdapters = [
+    { id: 'java', name: 'Java debugger (java-debug)', location: adapters?.java, install: 'java-debug' },
+    { id: 'node', name: 'Node.js debugger (js-debug)', location: adapters?.node, install: 'js-debug' },
+  ]
   return (
     <div className="settings-table" role="table" aria-label="Language servers">
       {LANGUAGE_SERVERS.map((server) => {
@@ -285,7 +291,19 @@ function LanguageServersPage() {
           </div>
         )
       })}
-      <div className="hint">Servers start when a file of their language opens.</div>
+      {debugAdapters.map((adapter) => (
+        <div key={adapter.id} className="settings-table-row" role="row">
+          <span role="cell">{adapter.name}</span>
+          <span role="cell" className={adapter.location ? 'hint' : 'vcs-conflicted'}>
+            {adapters === null
+              ? '…'
+              : adapter.location
+                ? `Installed: ${adapter.location}`
+                : `Not installed. Run: node scripts/install-language-servers.mjs ${adapter.install}`}
+          </span>
+        </div>
+      ))}
+      <div className="hint">Servers start when a file of their language opens; debuggers when a debug session starts.</div>
     </div>
   )
 }

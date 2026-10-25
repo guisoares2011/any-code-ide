@@ -82,6 +82,12 @@ export class LspRouter {
   private readonly methods = new Map<string | number, string>()
   private readonly own = new Map<string, { resolve(value: unknown): void; reject(error: unknown): void }>()
   private counter = 0
+  private initializeId: number | string | null = null
+  private markReady: () => void = () => undefined
+  /** Resolves once the server answered `initialize` (AnyCode's own requests wait for it). */
+  readonly ready = new Promise<void>((resolve) => {
+    this.markReady = resolve
+  })
 
   constructor(private readonly options: RouterOptions) {}
 
@@ -119,6 +125,7 @@ export class LspRouter {
       params.clientInfo = { name: 'AnyCode' }
       if (this.options.spec.initializationOptions !== undefined) params.initializationOptions = this.options.spec.initializationOptions
       message = { ...message, params }
+      this.initializeId = message.id ?? null
     }
     if (method === 'textDocument/didOpen') {
       const doc = (message.params as { textDocument: { uri: string; languageId: string } }).textDocument
@@ -169,6 +176,7 @@ export class LspRouter {
       this.options.onShowMessage?.(type, text)
     }
     const isResponse = message.method === undefined && message.id !== undefined && message.id !== null
+    if (isResponse && message.id === this.initializeId) this.markReady()
     if (isResponse && typeof message.id === 'string' && message.id.startsWith(OWN_ID_PREFIX)) {
       const pending = this.own.get(message.id)
       this.own.delete(message.id)
@@ -220,9 +228,10 @@ export class LspRouter {
   }
 
   /** AnyCode's own request on the same connection; never reaches Monaco's client. */
-  request<T>(method: string, params: unknown): Promise<T> {
+  async request<T>(method: string, params: unknown): Promise<T> {
+    await this.ready
     const id = `${OWN_ID_PREFIX}${++this.counter}`
-    return new Promise<T>((resolve, reject) => {
+    return await new Promise<T>((resolve, reject) => {
       this.own.set(id, { resolve: (value) => resolve(value as T), reject })
       this.options.toServer({ jsonrpc: '2.0', id, method, params })
     })

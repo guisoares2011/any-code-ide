@@ -5,6 +5,7 @@ import { NotificationsView } from '../notifications/NotificationsView'
 import { ProblemsView } from '../problems/ProblemsView'
 import { ProjectView } from '../project/ProjectView'
 import { RunView, RunTabs } from '../run/RunView'
+import { DebugTabs, DebugView } from '../debug/DebugView'
 import { useStore } from '../state/store'
 import { hideToolWindow, workbench, type Anchor, type ToolWindowId, TOOL_WINDOWS } from '../state/workbench'
 import { StructureView } from '../structure/StructureView'
@@ -22,6 +23,8 @@ function ToolWindowContent({ id, visible }: { id: ToolWindowId; visible: boolean
       return <TerminalView key={root} visible={visible} />
     case 'Run':
       return <RunView key={root} visible={visible} />
+    case 'Debug':
+      return <DebugView key={root} visible={visible} />
     case 'Commit':
       return <CommitView visible={visible} />
     case 'Structure':
@@ -40,6 +43,7 @@ function ToolWindowContent({ id, visible }: { id: ToolWindowId; visible: boolean
 function HeaderExtra({ id }: { id: ToolWindowId }): ReactNode {
   if (id === 'Terminal') return <TerminalTabs />
   if (id === 'Run') return <RunTabs />
+  if (id === 'Debug') return <DebugTabs />
   if (id === 'Maven') return <MavenHeaderActions />
   if (id === 'Commit') return <CommitHeaderActions />
   return null

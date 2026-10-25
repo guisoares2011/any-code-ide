@@ -4,11 +4,18 @@ import { useActions } from '../keymap/service'
 import { openFile, workbench } from '../state/workbench'
 import { gitState } from '../state/git'
 import { useStore } from '../state/store'
+import { showContextMenu, type MenuItem } from '../ui/ContextMenu'
 import { Icon } from '../ui/Icon'
 import { fileIconName } from '../ui/icons'
 import { dirname } from '@shared/paths'
+import { loadScratchDir, scratchState } from '../scratch/scratches'
+import { copyFiles, deleteFiles, fileClipboard, openInAssociatedApplication, openInTerminal, pasteFiles, renameFile, revealInFinder, type FileTarget } from './fileActions'
 import { mavenDecorations, type DirDecoration } from './moduleRoots'
+import { copyPathItems, directoryOf, newItems, projectMenu } from './projectMenu'
 import { sortEntries } from './sortEntries'
+
+/** Key of IntelliJ's "Scratches and Consoles" node, which is not a directory. */
+const SCRATCH_GROUP = 'anycode:scratches'
 
 interface Row {
   entry: DirEntry
@@ -29,7 +36,13 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
   const [expanded, setExpanded] = useState(() => new Set<string>([project.root]))
   const [selected, setSelected] = useState<string | null>(project.root)
   const [decorations, setDecorations] = useState(new Map<string, DirDecoration>())
+  const scratchDir = useStore(scratchState, (s) => s.dir)
+  const clipboard = useStore(fileClipboard, (s) => s)
   const treeRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    void loadScratchDir()
+  }, [])
 
   // Maven modules and source roots, like IntelliJ after importing the reactor; reread when a pom changes.
   useEffect(() => {
@@ -50,6 +63,7 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
   }, [project.root])
 
   const load = useCallback(async (dir: string) => {
+    if (dir === SCRATCH_GROUP) return
     const entries = await window.anycode.invoke('fs:readDir', dir)
     setChildren((prev) => new Map(prev).set(dir, sortEntries(entries)))
   }, [])
@@ -76,8 +90,13 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
       if (isOpen) for (const child of children.get(entry.path) ?? []) visit(child, depth + 1)
     }
     visit({ name: project.name, path: project.root, kind: 'directory' }, 0)
+    if (scratchDir) {
+      const isOpen = expanded.has(SCRATCH_GROUP)
+      result.push({ entry: { name: 'Scratches and Consoles', path: SCRATCH_GROUP, kind: 'directory' }, depth: 0, expanded: isOpen })
+      if (isOpen) visit({ name: 'Scratches', path: scratchDir, kind: 'directory' }, 1)
+    }
     return result
-  }, [project, expanded, children])
+  }, [project, expanded, children, scratchDir])
 
   const toggle = useCallback(
     (path: string, open?: boolean) => {
@@ -131,9 +150,33 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
     treeRef.current?.querySelector(`[data-path="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  const state = useRef({ rows, selected, toggle, activate })
+  /** The project root, the scratches directory and their group cannot be renamed, moved or deleted. */
+  const isFixed = useCallback((path: string) => path === project.root || path === scratchDir || path === SCRATCH_GROUP, [project.root, scratchDir])
+
+  const reload = useCallback(
+    (path: string) => {
+      for (const dir of [path, dirname(path)]) if (children.has(dir)) void load(dir)
+    },
+    [children, load],
+  )
+
+  const openMenu = useCallback(
+    async (row: Row, x: number, y: number) => {
+      if (row.entry.path === SCRATCH_GROUP) return
+      const target: FileTarget = { path: row.entry.path, kind: row.entry.kind }
+      const items = await projectMenu({
+        target,
+        isRoot: isFixed(target.path),
+        reload: () => reload(target.path),
+      })
+      showContextMenu(x, y, items)
+    },
+    [isFixed, reload],
+  )
+
+  const state = useRef({ rows, selected, toggle, activate, openMenu, isFixed, reload })
   useLayoutEffect(() => {
-    state.current = { rows, selected, toggle, activate }
+    state.current = { rows, selected, toggle, activate, openMenu, isFixed, reload }
   })
 
   useActions(() => {
@@ -147,7 +190,46 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
       setSelected(list[target]!.entry.path)
     }
     const selectedRow = (): Row | undefined => state.current.rows.find((r) => r.entry.path === state.current.selected)
+    const selectedTarget = (): FileTarget | undefined => {
+      const row = selectedRow()
+      return row && row.entry.path !== SCRATCH_GROUP ? { path: row.entry.path, kind: row.entry.kind } : undefined
+    }
+    /** Menus opened from the keyboard appear under the selected row. */
+    const belowSelection = (items: MenuItem[]): void => {
+      const element = treeRef.current?.querySelector(`[data-path="${CSS.escape(state.current.selected ?? '')}"]`)
+      const box = element?.getBoundingClientRect()
+      if (box) showContextMenu(box.left + 24, box.bottom, items)
+    }
+    const onTarget = (perform: (target: FileTarget) => void) => () => {
+      const target = selectedTarget()
+      if (target) perform(target)
+    }
+    const movable = (): boolean => inTree() && selectedTarget() !== undefined && !state.current.isFixed(state.current.selected ?? '')
+    const hasTarget = (): boolean => inTree() && selectedTarget() !== undefined
+    const fileClipboardFull = (): boolean => hasTarget() && fileClipboard.get().paths.length > 0
+    const fileTarget = (): boolean => hasTarget() && selectedTarget()?.kind !== 'directory'
     return [
+      { id: 'NewElement', isEnabled: hasTarget, perform: onTarget((t) => belowSelection(newItems(directoryOf(t)))) },
+      { id: 'RenameElement', isEnabled: movable, perform: onTarget((t) => void renameFile(t)) },
+      { id: '$Delete', isEnabled: movable, perform: onTarget((t) => void deleteFiles([t])) },
+      { id: '$Cut', isEnabled: movable, perform: onTarget((t) => copyFiles([t.path], 'cut')) },
+      { id: '$Copy', isEnabled: hasTarget, perform: onTarget((t) => copyFiles([t.path], 'copy')) },
+      { id: '$Paste', isEnabled: fileClipboardFull, perform: onTarget((t) => void pasteFiles(directoryOf(t))) },
+      { id: 'CopyPaths', text: 'Copy Path/Reference…', isEnabled: hasTarget, perform: onTarget((t) => belowSelection(copyPathItems(t.path))) },
+      { id: 'RevealIn', text: 'Reveal in Finder', isEnabled: hasTarget, perform: onTarget((t) => revealInFinder(t.path)) },
+      { id: 'Terminal.OpenInTerminal', text: 'Open in Terminal', isEnabled: hasTarget, perform: onTarget((t) => void openInTerminal(t)) },
+      { id: 'OpenInAssociatedApplication', isEnabled: fileTarget, perform: onTarget((t) => void openInAssociatedApplication(t.path)) },
+      { id: 'SynchronizeCurrentFile', isEnabled: hasTarget, perform: onTarget((t) => state.current.reload(t.path)) },
+      {
+        id: 'ShowPopupMenu',
+        isEnabled: hasTarget,
+        perform: () => {
+          const row = selectedRow()
+          const element = treeRef.current?.querySelector(`[data-path="${CSS.escape(state.current.selected ?? '')}"]`)
+          const box = element?.getBoundingClientRect()
+          if (row && box) void state.current.openMenu(row, box.left + 24, box.bottom)
+        },
+      },
       { id: 'Tree-selectNext', isEnabled: inTree, perform: move(1) },
       { id: 'Tree-selectPrevious', isEnabled: inTree, perform: move(-1) },
       { id: 'Tree-selectFirst', isEnabled: inTree, perform: move('first') },
@@ -202,12 +284,35 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
   }, [])
 
   return (
-    <div className="tree" tabIndex={0} ref={treeRef} data-focus-area="tree" role="tree" aria-label="Project">
+    <div
+      className="tree"
+      tabIndex={0}
+      ref={treeRef}
+      data-focus-area="tree"
+      role="tree"
+      aria-label="Project"
+      onContextMenu={(event) => {
+        // Below the last row: the project root's menu, like IntelliJ.
+        if (event.target !== event.currentTarget) return
+        event.preventDefault()
+        setSelected(project.root)
+        const root = rows[0]
+        if (root) void openMenu(root, event.clientX, event.clientY)
+      }}
+    >
       {rows.map((row) => {
         const decoration = row.entry.kind === 'directory' ? decorations.get(row.entry.path) : undefined
-        const icon = row.entry.kind === 'directory' ? (row.depth === 0 ? 'nodes/module' : (decoration?.icon ?? 'nodes/folder')) : fileIconName(row.entry.name)
+        const scratchGroup = row.entry.path === SCRATCH_GROUP
+        const icon = scratchGroup
+          ? 'fileTypes/scratches'
+          : row.entry.kind === 'directory'
+            ? row.depth === 0
+              ? 'nodes/module'
+              : (decoration?.icon ?? 'nodes/folder')
+            : fileIconName(row.entry.name)
         const vcsKind = vcs.get(row.entry.path)?.kind
-        const nameClass = [vcsKind ? `vcs-${vcsKind}` : '', decoration?.bold || row.depth === 0 ? 'module-root' : ''].filter(Boolean).join(' ')
+        const isCut = clipboard.mode === 'cut' && clipboard.paths.includes(row.entry.path)
+        const nameClass = [vcsKind ? `vcs-${vcsKind}` : '', (decoration?.bold || row.depth === 0) && !scratchGroup ? 'module-root' : ''].filter(Boolean).join(' ')
         return (
         <div
           key={row.entry.path}
@@ -216,9 +321,14 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
           role="treeitem"
           aria-expanded={row.entry.kind === 'directory' ? row.expanded : undefined}
           aria-selected={row.entry.path === selected}
-          className={`tree-row${row.entry.path === selected ? ' selected' : ''}`}
+          className={`tree-row${row.entry.path === selected ? ' selected' : ''}${isCut ? ' cut' : ''}`}
           style={{ paddingLeft: 4 + row.depth * 18 }}
           onMouseDown={() => setSelected(row.entry.path)}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            setSelected(row.entry.path)
+            void openMenu(row, event.clientX, event.clientY)
+          }}
           onClick={() => {
             if (row.entry.kind === 'directory') toggle(row.entry.path)
           }}
@@ -234,7 +344,7 @@ function ProjectTree({ project }: { project: ProjectInfo }) {
           <Icon name={icon} />
           <span className={nameClass || undefined}>{row.entry.name}</span>
           {decoration?.moduleName && <span className="module-name">[{decoration.moduleName}]</span>}
-          {row.depth === 0 && <span className="hint">{project.root}</span>}
+          {row.depth === 0 && !scratchGroup && <span className="hint">{project.root}</span>}
         </div>
         )
       })}

@@ -7,7 +7,7 @@ IDE leve, inspirada no IntelliJ IDEA / WebStorm, para abrir **todos os projetos*
 1. **Keymap = IntelliJ.** O keymap padrão é o do IntelliJ para macOS (`Mac OS X 10.5+`, que herda de `$default`). Não inventar atalhos que conflitem com ele. Ações internas usam os **mesmos action IDs do IntelliJ** (`GotoFile`, `SearchEverywhere`, `ReformatCode`, `ActivateTerminalToolWindow`…) para que o mapeamento seja 1:1 e os XMLs de keymap sejam carregados direto, sem tradução manual.
 2. **Identidade visual = Islands Dark** (tema ativo no IntelliJ do usuário). Cores, espaçamentos, layout em "ilhas" arredondadas, barra superior com projeto/VCS/run e tool windows laterais seguem o IntelliJ New UI. Fonte do editor/terminal: JetBrains Mono (OFL); UI: Inter.
 3. **AI-first.** O terminal com `claude` é cidadão de primeira classe (painel inferior padrão, aberto por projeto, sessão preservada). Editor, diff viewer e árvore de projeto existem para revisar e ajustar o que o agente faz.
-4. **Simplificada.** Fora do escopo do v1: debugger (breakpoints, step, inspeção de variáveis), ferramentas de banco, profiler, refactorings semânticos profundos, sistema de plugins. Se uma feature não serve ao fluxo "IA escreve → humano revisa/navega/executa", ela espera. **Exceção: Run/Stop básico entra no v1** (ver seção própria), porque Run/Debug é o terceiro maior uso real do usuário no IntelliJ (`docs/reverse-engineering.md`, U3).
+4. **Simplificada.** Fora do escopo: ferramentas de banco, profiler, refactorings semânticos profundos, sistema de plugins. Se uma feature não serve ao fluxo "IA escreve → humano revisa/navega/executa", ela espera. **Exceções:** Run/Stop e o **debugger** (decisão do usuário em 2026-10-24; ver seções próprias), porque Run/Debug é o terceiro maior uso real do usuário no IntelliJ (`docs/reverse-engineering.md`, U3).
 5. **Multi-projeto.** Como no IntelliJ: janelas de projeto, que podem ser mescladas em abas numa janela só; cada projeto com seu terminal Claude, árvore e abas.
 
 ## Stack (decisão padrão)
@@ -61,7 +61,32 @@ Executar e parar o projeto sem sair da IDE. Não é um debugger.
   - Cada execução vira uma configuração **temporária** (até 5 por projeto), selecionada no run widget para o Rerun, como no IntelliJ.
   - Import/export no formato `JUnit` do IntelliJ (`TEST_OBJECT` class/method/package; pacote vazio = módulo inteiro). Padrões, tags e diretórios ficam de fora. O import de Gradle agora inclui os `scriptParameters` (`--tests …`).
 - **Atalhos:** `Run` ⌃R, `Stop` ⌘F2, `Rerun` ⌘R (no Run), `ChooseRunConfiguration` ⌃⌥R, `ActivateRunToolWindow` ⌘4, `RunClass` ⌃⇧R.
-- **Fora:** `Debug` (⌃D) e tudo de debugger, cobertura e profiler; árvore de resultados de teste (a saída é a do build, no Run); Docker.
+- **Fora:** cobertura e profiler; árvore de resultados de teste (a saída é a do build, no Run); Docker. O debugger tem seção própria.
+
+## Debugger
+
+Debug Adapter Protocol (DAP), com os adaptadores open source do VS Code, baixados pelo `install-language-servers.mjs` (não vão no `.app`): **java-debug** 0.53.1 (EPL-1.0, Maven Central) e **js-debug** 1.140.0 (MIT, GitHub).
+
+- **Main** (`src/main/debug/`): conexões DAP por TCP em `127.0.0.1` (`debug:connect`/`debug:send`/`debug:message`, mesmo framing do LSP), o servidor do js-debug (`dapDebugServer.js 0 127.0.0.1`, com `ELECTRON_RUN_AS_NODE=1`, um por janela) e `debug:freePort`. O jar do java-debug entra como `bundles` no `initialize` do jdtls (`withJavaDebugBundle`, em `lsp/manager.ts`); um jdtls iniciado antes da instalação só ganha o java-debug depois de reiniciar o app.
+- **Java (Spring Boot, JUnit)**, sempre pelo build, como o Run: o `run:command` recebe `{ port }` e o JVM espera o debugger (`-agentlib:jdwp=…,server=y,suspend=y,address=127.0.0.1:<porta>`): em `spring-boot.run.jvmArguments`, em `-Dmaven.surefire.debug` ou, no Gradle, `--debug-jvm` (porta fixa 5005). O renderer espera "Listening for transport dt_socket" no console, pede `vscode.java.startDebugSession` ao jdtls (`workspace/executeCommand`, depois do `initialize`) e faz `attach`. Breakpoints só em `.java` (o java-debug resolve a classe pelo JDT; Kotlin fica sem breakpoint por enquanto).
+- **Node (npm e scripts .js/.ts)**: `launch` `pwa-node` com `console: integratedTerminal`; o js-debug pede `runInTerminal` (vira um PTY no Console) e abre uma sessão filha por processo Node (`startDebugging` → nova conexão na mesma porta). npm roda como `/bin/sh -c <script do run:command>`. Validado em `e2e/debugger.spec.ts`.
+- **Renderer** (`src/renderer/debug/`): `dap.ts` (cliente), `session.ts` (estado, threads, frames, steps, Run to Cursor com breakpoint temporário, `evaluate`), `launch.ts`, `breakpoints.ts` (por arquivo, em `localStorage`, seguem as linhas editadas e as renomeações), `editorDebug.ts` (gutter: clique ou ⌘F8; linha de execução com as cores `EXECUTIONPOINT_ATTRIBUTES`/`BREAKPOINT_ATTRIBUTES` do esquema; valor no hover quando pausado) e a tool window **Debug** (stripe inferior, ⌘5): abas de sessão, toolbar, "Threads & Variables" (thread, Frames, Variables com os escopos baratos abertos, campo de expressão com `Console.Execute` ↩) e "Console" (grupo de PTY `debug` por projeto).
+- **Onde começa:** botão Debug do run widget, CodeLens "Debug" ao lado de "▶ Run" nos testes, "Debug '<nome>'" no menu da árvore, `Debug` ⌃D e `DebugClass` ⌃⇧D.
+- **Atalhos:** `ToggleLineBreakpoint` ⌘F8, `ViewBreakpoints` ⇧⌘F8 (diálogo para habilitar, remover ou ir até o breakpoint), `Resume` ⌥⌘R/F9, `Pause`, `StepOver` F8, `StepInto` F7 (`SmartStepInto` ⇧F7 e `ForceStepInto` ⌥⇧F7 fazem o mesmo), `StepOut` ⇧F8, `RunToCursor` ⌥F9, `EvaluateExpression` ⌥F8, `ShowExecutionPoint` ⌥F10, `XDebugger.MuteBreakpoints`; `Stop` ⌘F2 e `Rerun` ⌘R valem para a sessão quando a Debug tem foco (ou quando nada roda no Run).
+- **Fora:** watches, breakpoints condicionais, de exceção e de método, hot swap, Kotlin, attach a processo já rodando.
+
+## Árvore do projeto: menu de contexto
+
+Botão direito (ou `ShowPopupMenu`) abre o `ProjectViewPopupMenu` reduzido (`project/projectMenu.ts`, com o componente genérico `ui/ContextMenu.tsx`, navegável por ↑↓; → entra no submenu e ← volta, via `List-select*`):
+- **New** (`NewElement` ⌘N abre o mesmo submenu sob a seleção): File (aceita `a/b/c.txt`), Scratch File, Directory; dentro de `src/*/java|kotlin`, Package (pontos viram pastas), **Java Class** (Class/Interface/Enum/Record/Annotation) e **Kotlin Class/File**, com o `package` vindo do caminho e "sub.Nome" criando o subpacote.
+- Cut/Copy/Paste (⌘X/⌘C/⌘V; colar sobre um arquivo vai para a pasta dele; a cópia ganha um nome livre, "x copy.ts"), **Copy Path/Reference…** (⇧⌘C: absoluto, nome ou relativo à raiz), **Rename…** (⇧F6, seleciona o nome sem a extensão; abas, edições não salvas e breakpoints acompanham), **Delete…** (⌫, confirma e manda para a Lixeira; em headless apaga de verdade).
+- **Run/Debug '<nome>'**: testes JUnit (classe, ou pacote e módulo pela pasta de teste) e scripts (`.sh`, `.js`/`.ts` com `node`, `.py`…), que rodam na pasta do arquivo.
+- **Open In** › Finder (`RevealIn`), Terminal (`Terminal.OpenInTerminal`, nova aba na pasta), Associated Application; **Git** › Show History / Rollback…; **Reload from Disk** (`SynchronizeCurrentFile`). Em headless, o Finder e os apps externos não abrem.
+- Main: `fs:createFile`, `fs:createDirectory`, `fs:rename`, `fs:copyInto`, `fs:moveInto`, `fs:trash`, `fs:exists`, `shell:reveal`, `shell:openPath`, todos limitados aos projetos abertos (e às scratches). Os diálogos de nome e de confirmação ficam em `ui/dialogs.tsx` (`askInput`, `askConfirm`).
+
+## Scratch Files
+
+Arquivos fora dos projetos, em `<userData>/scratches/`, compartilhados por todas as janelas (como o `config/scratches` do IntelliJ): `NewScratchFile` ⇧⌘N (popup de linguagens, com a do editor ativo primeiro; cria `scratch.<ext>`, `scratch_1.<ext>`…), `Scratch.ShowFilesPopup` e `Scratch.ChangeLanguage` (troca a extensão). Aparecem no fim da árvore, em "Scratches and Consoles › Scratches", com o mesmo menu de contexto (inclusive Run/Debug de scripts). O main libera o diretório com `allowRoot` e o observa para todas as janelas. LSP e ESLint não analisam scratches, que ficam fora de qualquer raiz.
 
 ## Markdown
 
@@ -152,6 +177,7 @@ Mapa do que existe hoje no renderer:
 - `theme/`: resolve o tema e expõe tokens como `--c-<cor>`/`--ui-<Chave>`. Também gera os temas do Monaco e do xterm a partir do esquema do editor.
 - `state/workbench.ts`: tool windows (layout padrão V2), abas, popups e pedidos de foco. `terminal/ptySessions.ts`: sessões PTY por grupo (Terminal, Run) que sobrevivem a esconder o painel.
 - `markdown/`: `shellFences` (blocos executáveis e corte do prompt), `render` (HTML sanitizado), `MarkdownPreview`, `layout` (Editor/Split/Preview por arquivo) e `markdownSupport` (CodeLens "Run in Terminal").
+- `debug/`: debugger (DAP, sessões, breakpoints, tool window Debug); `scratch/`: Scratch Files; `project/fileActions.ts` e `projectMenu.ts`: operações e menu de contexto da árvore; `ui/ContextMenu.tsx` e `ui/dialogs.tsx`: menus e diálogos genéricos.
 - Áreas de foco: `data-focus-area` (`editor`, `terminal`, `run`, `tree`, `popup`) decide quais handlers ficam habilitados.
 
 ## Comandos
@@ -160,7 +186,7 @@ Mapa do que existe hoje no renderer:
 - `npm run test:e2e`: build + Playwright `_electron` com `ANYCODE_HEADLESS=1`. Os testes criam um projeto temporário e rodam com `ANYCODE_AGENT_COMMAND=""` (shell comum na aba do agente).
 - `npm run screenshot`: build + captura headless em `out/screenshots/main.png`. O app sai sozinho; prazo máximo de 60 s.
 - `npm run build` (saída em `out/`). `npm run dev` abre janela: **só quando o usuário pedir**.
-- `node scripts/install-language-servers.mjs [jdtls] [kotlin]`: baixa os servidores de Java (jdtls, ~50 MB) e Kotlin (kotlin-lsp, ~360 MB, 1,1 GB descompactado) para `~/Library/Application Support/AnyCode/language-servers/`, com verificação de SHA-256. O TypeScript não precisa de download. Os E2E de Java/Kotlin são pulados se o servidor não estiver instalado.
+- `node scripts/install-language-servers.mjs [jdtls] [kotlin] [java-debug] [js-debug]`: baixa os servidores de Java (jdtls, ~50 MB) e Kotlin (kotlin-lsp, ~360 MB, 1,1 GB descompactado) e os adaptadores de debug (java-debug e js-debug, ~1 MB cada) para `~/Library/Application Support/AnyCode/language-servers/`, com verificação de checksum (SHA-1 do Maven Central para o java-debug; SHA-256 fixado no script para o js-debug, que não publica checksum). O TypeScript não precisa de download. Os E2E de Java, Kotlin e debugger são pulados se o que usam não estiver instalado.
 - `npm run package` (`.dmg` + `.zip` arm64 em `dist/`) / `npm run package:dir` (só o `AnyCode.app`, mais rápido). Usam o electron-builder (`electron-builder.yml`); nenhuma janela abre.
 - `npm run test:packaged`: smoke test headless do `dist/mac-arm64/AnyCode.app` (terminal, typescript-go, ESLint, Git). Rode depois do `package:dir`.
 - `npx electron scripts/make-icon.mjs`: renderiza `build/icon.svg` em `build/icon.icns` (offscreen, sem janela).
@@ -175,6 +201,8 @@ Variáveis de ambiente do app:
 - `ANYCODE_USER_DATA=<dir>`: diretório de dados do app (recentes…). Os E2E usam um temporário.
 - `ANYCODE_LSP_TRACE=1`: loga no main todas as mensagens LSP (método, id e trecho do payload), nos dois sentidos.
 - `ANYCODE_JDTLS_HOME` / `ANYCODE_KOTLIN_LSP_HOME`: usam um servidor instalado em outro lugar.
+- `ANYCODE_JAVA_DEBUG_JAR` / `ANYCODE_JS_DEBUG_HOME`: o mesmo para os adaptadores de debug.
+- `ANYCODE_DAP_TRACE=1`: loga no main as mensagens DAP, nos dois sentidos.
 - `ANYCODE_SCREENSHOT_DELAY_MS`: espera extra antes do screenshot (ex.: para o `claude` conectar).
 
 Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 baixa o binário sob demanda (`node node_modules/electron/install.js`). O `@lydell/node-pty` traz prebuilds N-API, sem compilação.
@@ -207,4 +235,6 @@ Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 
    - `NextProjectWindow` cicla as abas de projeto; com uma só, passa para a próxima janela.
    - A sessão (`open-projects.json`, `{ windows: [{ roots, current }] }`, que também lê o formato antigo `{ roots, current }`) reabre todas as janelas. Fechar a última janela (ou sair) a mantém na sessão; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
 
-Pendências conhecidas: grafo de branches no Log; edição de keymap. Plano detalhado e estado de cada uma em `docs/roadmap-pendencias.md`.
+10. ✅ Menu de contexto da árvore, Scratch Files e debugger (Java via java-debug, Node via js-debug). Ver as seções próprias.
+
+Pendências conhecidas: grafo de branches no Log; edição de keymap; breakpoints em Kotlin, watches e breakpoints condicionais. Plano detalhado e estado de cada uma em `docs/roadmap-pendencias.md`.

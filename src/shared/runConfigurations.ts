@@ -124,6 +124,27 @@ export function junitName(spec: Pick<JUnitConfiguration, 'scope' | 'module' | 'p
   }
 }
 
+/** Configurations the debugger can start: JVM ones attach java-debug, npm and scripts go through js-debug. */
+export function debugKind(spec: RunConfigurationSpec): 'java' | 'node' | null {
+  switch (spec.type) {
+    case 'spring-boot':
+    case 'junit':
+      return 'java'
+    case 'npm':
+      return 'node'
+    default:
+      return null
+  }
+}
+
+/** A JVM started for debugging: it listens for a debugger (JDWP) on this port and waits for it. */
+export interface JvmDebug {
+  port: number
+}
+
+/** The JDWP agent of a JVM that waits for a debugger to attach on a loopback port. */
+export const jdwpAgent = (port: number): string => `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:${port}`
+
 /** What the renderer needs to start a configuration in a terminal. */
 export interface RunCommand {
   /** Script for the login shell (`$SHELL -l -c <script>`). */
@@ -131,6 +152,8 @@ export interface RunCommand {
   /** Absolute working directory. */
   cwd: string
   env: Record<string, string>
+  /** When debugging a JVM: the port its JDWP agent listens on (Gradle's --debug-jvm always uses 5005). */
+  debugPort?: number
 }
 
 /** IntelliJ's one-line environment variables field: `KEY=value;KEY2=value`. */

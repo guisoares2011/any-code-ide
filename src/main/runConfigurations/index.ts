@@ -22,7 +22,7 @@ export function registerRunHandlers(dataDir: string): void {
   handle('run:configurations', (root) => store.list(assertInsideProject(root)))
   handle('run:save', (root, spec, asProjectFile) => store.save(assertInsideProject(root), spec, asProjectFile))
   handle('run:delete', (root, id) => store.remove(assertInsideProject(root), id))
-  handle('run:command', async (root, spec: RunConfigurationSpec) => {
+  handle('run:command', async (root, spec: RunConfigurationSpec, debug) => {
     const projectRoot = assertInsideProject(root)
     const cwd = spec.workingDirectory ? join(projectRoot, spec.workingDirectory) : projectRoot
     return runCommand(spec, {
@@ -32,7 +32,7 @@ export function registerRunHandlers(dataDir: string): void {
       packageManager: await packageManager(cwd),
       gradle: existsSync(join(projectRoot, 'gradlew')) ? './gradlew' : 'gradle',
       usesGradle: usesGradle(projectRoot),
-    })
+    }, debug)
   })
   handle('maven:modules', (root) => readReactor(assertInsideProject(root)))
   handle('maven:dependencies', (root) => resolveDependencies(assertInsideProject(root), shell()))

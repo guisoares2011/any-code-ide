@@ -4,7 +4,7 @@ import { createStore } from './store'
 
 export type Anchor = 'left' | 'bottom' | 'right'
 
-export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Version Control' | 'Problems View' | 'Terminal' | 'Run' | 'Notifications' | 'Maven'
+export type ToolWindowId = 'Project' | 'Commit' | 'Structure' | 'Version Control' | 'Problems View' | 'Terminal' | 'Run' | 'Debug' | 'Notifications' | 'Maven'
 
 export interface ToolWindowSpec {
   id: ToolWindowId
@@ -30,6 +30,7 @@ export const TOOL_WINDOWS: readonly ToolWindowSpec[] = [
   { id: 'Problems View', anchor: 'bottom', title: 'Problems', icon: 'toolwindows/problems@20x20', activateActionId: 'ActivateProblemsViewToolWindow' },
   { id: 'Terminal', anchor: 'bottom', title: 'Terminal', icon: 'toolwindow/terminal@20x20', activateActionId: 'ActivateTerminalToolWindow' },
   { id: 'Run', anchor: 'bottom', title: 'Run', icon: 'toolwindows/run@20x20', activateActionId: 'ActivateRunToolWindow' },
+  { id: 'Debug', anchor: 'bottom', title: 'Debug', icon: 'toolwindows/debug@20x20', activateActionId: 'ActivateDebugToolWindow' },
   { id: 'Notifications', anchor: 'right', title: 'Notifications', icon: 'toolwindows/notifications@20x20', activateActionId: 'ActivateNotificationsToolWindow' },
   { id: 'Maven', anchor: 'right', title: 'Maven', icon: 'toolwindow/maven@20x20', activateActionId: 'ActivateMavenToolWindow' },
 ]
@@ -53,7 +54,17 @@ export const DIFF_TAB_PREFIX = 'diff:'
 export const diffTabKey = (tabName: string): string => DIFF_TAB_PREFIX + tabName
 export const vcsDiffTabKey = (path: string): string => `vcsdiff:${path}`
 
-export type PopupKind = 'GotoFile' | 'GotoAction' | 'SearchEverywhere' | 'RecentFiles' | 'ChooseRunConfiguration' | 'Projects' | 'Branches'
+export type PopupKind =
+  | 'GotoFile'
+  | 'GotoAction'
+  | 'SearchEverywhere'
+  | 'RecentFiles'
+  | 'ChooseRunConfiguration'
+  | 'Projects'
+  | 'Branches'
+  | 'NewScratchFile'
+  | 'ScratchFiles'
+  | 'ScratchLanguage'
 
 export type FocusTarget = 'editor' | ToolWindowId
 
@@ -298,4 +309,15 @@ export function openPopup(popup: PopupKind): void {
 
 export function closePopup(): void {
   workbench.set({ popup: null })
+}
+
+/** Tabs, dirty marks and recent files of files below `from` follow a rename or move to `to`. */
+export function relocateTabs(from: string, to: string): void {
+  const map = (path: string): string => (path === from || path.startsWith(`${from}/`) ? to + path.slice(from.length) : path)
+  workbench.set((s) => ({
+    tabs: s.tabs.map((t) => (t.kind === 'file' && map(t.path) !== t.path ? { ...t, path: map(t.path), name: basename(map(t.path)) } : t)),
+    activeTab: s.activeTab && map(s.activeTab),
+    dirty: new Set([...s.dirty].map(map)),
+    recentFiles: s.recentFiles.map(map),
+  }))
 }

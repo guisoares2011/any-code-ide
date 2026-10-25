@@ -33,14 +33,17 @@ export function selectedConfiguration(): RunConfigurationSpec | undefined {
   return configurations.find((c) => c.id === selected)
 }
 
-/** Runs a configuration created on the fly (a test from the editor), keeping it selectable for a while. */
-export async function runTemporary(configuration: RunConfigurationSpec): Promise<void> {
+/**
+ * Runs a configuration created on the fly (a test from the editor), keeping it selectable for a
+ * while; `start` debugs it instead.
+ */
+export async function runTemporary(configuration: RunConfigurationSpec, start: (c: RunConfigurationSpec) => Promise<void> = runConfiguration): Promise<void> {
   const root = workbench.get().project?.root
   if (!root) return
   const list = (temporaries.get(root) ?? []).filter((t) => t.id !== configuration.id)
   temporaries.set(root, [...list, configuration].slice(-MAX_TEMPORARY))
-  runState.set((s) => ({ configurations: [...s.configurations.filter((c) => c.id !== configuration.id), configuration] }))
-  await runConfiguration(configuration)
+  runState.set((s) => ({ configurations: [...s.configurations.filter((c) => c.id !== configuration.id), configuration], selected: configuration.id }))
+  await start(configuration)
 }
 
 /** Runs a configuration in the Run tool window, reusing its tab when it already has one. */

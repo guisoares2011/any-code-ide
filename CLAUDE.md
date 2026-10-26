@@ -113,7 +113,7 @@ Preview renderizado de `.md` com blocos de shell executáveis (`src/renderer/mar
 ## Settings
 
 Diálogo `ShowSettings` (⌘,, também no ícone de engrenagem), com busca, árvore de páginas, Apply/OK/Cancel. Gravado em `<userData>/settings.json` (`src/shared/settings.ts` normaliza valores e limita os números; `src/main/settings.ts` guarda).
-- **Editor › Font:** tamanho e altura de linha (editores e diffs, aplicados ao vivo).
+- **Editor › Font:** tamanho e altura de linha (editores e diffs, aplicados ao vivo). Também mudam pelo teclado (`EditorIncreaseFontSizeGlobal` ⌃⇧., `EditorDecreaseFontSizeGlobal` ⌃⇧,, `EditorResetFontSizeGlobal` sem atalho; ⌘+/⌘- são Expand/Collapse Region no keymap) e por ⌘+roda do mouse ou pinça no trackpad sobre o editor, como o "Change font size with ⌘+Mouse Wheel" do IntelliJ (`editor/fontZoom.ts`). A altura de linha acompanha a proporção, e o valor é gravado nos settings.
 - **Tools › Terminal:** shell (vazio = `$SHELL`; vale para terminais e run configurations), comando do agente (padrão `claude`; `ANYCODE_AGENT_COMMAND` tem precedência e o modo headless abre shell) e tamanho da fonte.
 - **Languages & Frameworks:** status dos servidores de linguagem com o comando de instalação; ESLint ligado/desligado ("Automatic ESLint configuration"); layout padrão do Markdown.
 - **Keymap:** somente leitura, com busca por nome, action ID ou atalho (`⌘K`, `meta K`). Editar keymap fica para depois.
@@ -233,7 +233,7 @@ Notas de ambiente: o npm 11 bloqueia install scripts por padrão. O Electron 45 
    - **Merge All Project Windows** (`MergeAllWindowsAction`, o ID do IntelliJ) traz os projetos das outras janelas como abas desta; **Move Tab to New Window** (`AnyCode.MoveTabToNewWindow`) leva a aba atual para uma janela nova. Os terminais do projeto recomeçam na janela de destino, e o `claude` roda com `--continue` (com fallback para `claude` se não houver conversa), retomando a conversa daquela pasta. Não usamos as abas nativas do macOS porque elas exigem a barra de título nativa (o VS Code também força isso).
    - **Janelas** (`src/main/index.ts`, `ProjectWindow`): cada janela tem seus projetos, o atual e **o próprio bridge** (porta e lockfile), cujo `workspaceFolders` são só os projetos dela. Assim o `claude` de cada janela abre diffs e lê a seleção daquela janela. PTYs, LSPs e o watcher respondem à janela que os iniciou (`handleFrom`/`onSendFrom` em `ipc.ts`). Um LSP cujo projeto muda de janela é reiniciado. Fechar uma janela mata os terminais e os LSPs dela e remove o lockfile.
    - `NextProjectWindow` cicla as abas de projeto; com uma só, passa para a próxima janela.
-   - A sessão (`open-projects.json`, `{ windows: [{ roots, current }] }`, que também lê o formato antigo `{ roots, current }`) reabre todas as janelas. Fechar a última janela (ou sair) a mantém na sessão; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
+   - A sessão (`open-projects.json`, `{ windows: [{ roots, current }] }`, que também lê o formato antigo `{ roots, current }`) reabre todas as janelas. Fechar a última janela encerra o app, também no macOS (decisão do usuário), e a mantém na sessão; aberto pelo Dock (cwd `/`), nunca abre `/` como projeto.
 
 10. ✅ Menu de contexto da árvore, Scratch Files e debugger (Java via java-debug, Node via js-debug). Ver as seções próprias.
 

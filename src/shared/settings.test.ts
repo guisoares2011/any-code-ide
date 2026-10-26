@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, normalizeSettings } from './settings'
+import { DEFAULT_SETTINGS, normalizeSettings, resizeEditorFont } from './settings'
 
 describe('settings', () => {
   it('fills missing values with the defaults and drops unknown ones', () => {
@@ -20,5 +20,12 @@ describe('settings', () => {
       eslint: { enabled: true },
       markdown: { defaultLayout: 'auto' },
     })
+  })
+
+  it('resizes the editor font keeping the line height proportional, within the limits', () => {
+    expect(resizeEditorFont({ fontSize: 13, lineHeight: 20 }, 1)).toEqual({ fontSize: 14, lineHeight: 22 })
+    expect(resizeEditorFont({ fontSize: 13, lineHeight: 20 }, -1)).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect(resizeEditorFont({ fontSize: 32, lineHeight: 48 }, 1)).toEqual({ fontSize: 32, lineHeight: 48 })
+    expect(resizeEditorFont({ fontSize: 9, lineHeight: 11 }, -1)).toEqual({ fontSize: 8, lineHeight: 10 })
   })
 })

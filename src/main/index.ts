@@ -344,9 +344,6 @@ void app.whenReady().then(async () => {
   // Before any terminal, language server or build starts: they all need the user's PATH.
   await adoptShellEnv(userShell())
   await restoreSession()
-  app.on('activate', () => {
-    if (windows.size === 0) void restoreSession()
-  })
 })
 
 app.on('before-quit', () => {
@@ -360,6 +357,5 @@ app.on('will-quit', () => {
   for (const stop of watchers.values()) stop()
   for (const entry of windows.values()) entry.bridge.disposeSync()
 })
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' || headless) app.quit()
-})
+// Closing the last window quits, on macOS too (the user's choice): no app left in the Dock without windows.
+app.on('window-all-closed', () => app.quit())

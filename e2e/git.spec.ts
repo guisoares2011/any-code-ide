@@ -173,3 +173,19 @@ test('the branch widget lists branches, checks one out and creates a new one', a
   await expect.poll(() => git('branch', '--show-current')).toBe('topic/new')
   await expect(toolbar).toContainText('topic/new')
 })
+
+test('a long commit message never widens the window past its edges', async () => {
+  const { page, app } = fixture
+  git('commit', '-q', '--allow-empty', '-m', 'A very long commit message '.repeat(20))
+  await page.keyboard.press('Meta+Digit9') // ActivateVersionControlToolWindow
+  await expect(page.getByRole('tree', { name: 'Commits' }).getByRole('treeitem')).toHaveCount(2)
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(900, 700))
+  await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(900)
+  const widths = await page.evaluate(() =>
+    ['.main-toolbar', '.workbench-body', '.status-bar'].map((selector) => Math.round(document.querySelector(selector)!.getBoundingClientRect().width)),
+  )
+  expect(widths).toEqual([900, 900, 900])
+  // The run widget at the right end of the toolbar stays on screen.
+  const settings = await page.getByRole('button', { name: 'Settings' }).boundingBox()
+  expect(settings!.x + settings!.width).toBeLessThanOrEqual(900)
+})

@@ -14,6 +14,7 @@ import { Icon } from '../ui/Icon'
 import { fileIconName } from '../ui/icons'
 import { applyPendingReveal, openDocument, releaseDocument, revealRequests, type DocumentState } from './documents'
 import { editorActions, sendSelectionToClaude } from './editorActions'
+import { attachWheelFontZoom, fontSizeActions } from './fontZoom'
 import { setupMonaco, THEME_NAME } from './monacoSetup'
 import { editorFont, settingsState } from '../state/settings'
 import { attachBreakpointGutter } from '../debug/editorDebug'
@@ -34,9 +35,13 @@ export function EditorArea() {
   const dirty = useStore(workbench, (s) => s.dirty)
   const vcs = useStore(gitState, (s) => s.byPath)
   const active = tabs.find((t) => t.path === activeTab)
+  const island = useRef<HTMLDivElement>(null)
+
+  useActions(fontSizeActions, [])
+  useEffect(() => (island.current ? attachWheelFontZoom(island.current) : undefined), [])
 
   return (
-    <div className="island editor-island" data-focus-area="editor">
+    <div className="island editor-island" data-focus-area="editor" ref={island}>
       {tabs.length > 0 && (
         <div className="editor-tabs" role="tablist">
           {tabs.map((tab) => (

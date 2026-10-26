@@ -65,6 +65,9 @@ button {
   display: grid;
   /* toolbar, project tabs (empty with a single project), body, status bar */
   grid-template-rows: var(--toolbar-height) auto 1fr var(--statusbar-height);
+  /* minmax(0, …): wide content (a long commit message, a long line) must not widen the window's
+     single column past the viewport; it scrolls or truncates inside its own panel. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -1378,13 +1381,15 @@ button {
 
 .log-subject {
   flex: 1;
-  min-width: 0;
+  min-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .log-author {
-  width: 140px;
+  /* Narrow panels shrink the author before the subject. */
+  flex: 0 1 140px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--c-text-secondary);

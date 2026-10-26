@@ -69,3 +69,14 @@ export function normalizeSettings(input: unknown): Settings {
     },
   }
 }
+
+/**
+ * The editor font `steps` points larger (or smaller), clamped; the line height keeps its proportion
+ * to the font so lines never overlap. Used by the font size actions and ⌘+mouse wheel.
+ */
+export function resizeEditorFont(editor: Settings['editor'], steps: number): Settings['editor'] {
+  const fontSize = Math.min(Math.max(editor.fontSize + steps, FONT_SIZE_RANGE.min), FONT_SIZE_RANGE.max)
+  if (fontSize === editor.fontSize) return editor
+  const lineHeight = Math.round((editor.lineHeight * fontSize) / editor.fontSize)
+  return { fontSize, lineHeight: Math.min(Math.max(lineHeight, LINE_HEIGHT_RANGE.min), LINE_HEIGHT_RANGE.max) }
+}

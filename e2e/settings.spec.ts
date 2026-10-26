@@ -51,3 +51,33 @@ test('the search finds pages, and the Keymap page lists shortcuts', async () => 
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 })
+
+test('⌃⇧. / ⌃⇧, and ⌘+mouse wheel change the editor font size, which is saved', async () => {
+  const { page } = fixture
+  await gotoFile(page, 'greeting.ts')
+  const line = page.locator('.editor-pane .monaco-editor .view-line').first()
+  await expect(line).toHaveCSS('height', '20px')
+  await page.locator('.editor-pane .monaco-editor .view-lines').click()
+
+  await page.keyboard.press('Control+Shift+Period') // EditorIncreaseFontSizeGlobal
+  await expect(line).toHaveCSS('font-size', '14px')
+  await expect(line).toHaveCSS('height', '22px')
+  await page.keyboard.press('Control+Shift+Comma') // EditorDecreaseFontSizeGlobal
+  await expect(line).toHaveCSS('font-size', '13px')
+
+  const box = (await page.locator('.editor-pane .monaco-editor').boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.keyboard.down('Meta')
+  await page.mouse.wheel(0, -100)
+  await page.mouse.wheel(0, -100)
+  await page.keyboard.up('Meta')
+  await expect(line).toHaveCSS('font-size', '15px')
+
+  // Saved once the steps stop; until then settings.json may not exist yet.
+  const savedSize = () =>
+    readFile(join(fixture.userData, 'settings.json'), 'utf8').then(
+      (text) => (JSON.parse(text) as { editor: { fontSize: number } }).editor.fontSize,
+      () => null,
+    )
+  await expect.poll(savedSize).toBe(15)
+})

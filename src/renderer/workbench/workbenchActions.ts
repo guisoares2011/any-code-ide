@@ -1,6 +1,7 @@
 import { closeEditorTab } from '../editor/EditorArea'
 import { saveAll } from '../editor/documents'
 import type { ActionDefinition } from '../keymap/actions'
+import { openFindInFiles } from '../find/findInFiles'
 import { gitState, pushCurrentBranch } from '../state/git'
 import { closeCurrentProject, mergeAllProjectWindows, moveProjectTabToNewWindow, pickAndOpenProject } from '../state/projects'
 import {
@@ -46,6 +47,9 @@ export function workbenchActions(): ActionDefinition[] {
     { id: 'GotoFile', perform: () => openPopup('GotoFile') },
     { id: 'GotoAction', perform: () => openPopup('GotoAction') },
     { id: 'RecentFiles', perform: () => openPopup('RecentFiles') },
+    // Edit › Find › Find in Files… (⇧⌘F) and Replace in Files… (⇧⌘R).
+    { id: 'FindInPath', isEnabled: () => workbench.get().project !== null, perform: () => openFindInFiles('find') },
+    { id: 'ReplaceInPath', isEnabled: () => workbench.get().project !== null, perform: () => openFindInFiles('replace') },
     { id: 'SaveAll', perform: () => void saveAll() },
     // ⌘K: the Commit tool window with the message field focused, like IntelliJ's non-modal commit.
     { id: 'CheckinProject', perform: () => showToolWindow('Commit') },

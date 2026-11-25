@@ -12,8 +12,10 @@ export interface Settings {
     fontSize: number
     /** Shell for terminals and run configurations; "" uses $SHELL. */
     shell: string
-    /** Command of the agent tab opened with each project; "" opens a plain shell. */
+    /** Command of the agent session (New Claude Session); "" disables it. */
     agentCommand: string
+    /** Start the agent in the first terminal tab when a project opens; off opens a plain shell. */
+    startAgent: boolean
   }
   eslint: {
     enabled: boolean
@@ -22,13 +24,18 @@ export interface Settings {
     /** auto: READMEs open as the preview, other files side by side. */
     defaultLayout: MarkdownDefaultLayout
   }
+  system: {
+    /** Reopen the previous session's windows at startup; off shows the Welcome screen. */
+    reopenProjects: boolean
+  }
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   editor: { fontSize: 13, lineHeight: 20 },
-  terminal: { fontSize: 13, shell: '', agentCommand: 'claude' },
+  terminal: { fontSize: 13, shell: '', agentCommand: 'claude', startAgent: false },
   eslint: { enabled: true },
   markdown: { defaultLayout: 'auto' },
+  system: { reopenProjects: false },
 }
 
 export const FONT_SIZE_RANGE = { min: 8, max: 32 } as const
@@ -52,6 +59,7 @@ export function normalizeSettings(input: unknown): Settings {
   const terminal = section('terminal')
   const eslint = section('eslint')
   const markdown = section('markdown')
+  const system = section('system')
   const d = DEFAULT_SETTINGS
   return {
     editor: {
@@ -62,11 +70,13 @@ export function normalizeSettings(input: unknown): Settings {
       fontSize: number(terminal.fontSize, d.terminal.fontSize, FONT_SIZE_RANGE),
       shell: text(terminal.shell, d.terminal.shell),
       agentCommand: text(terminal.agentCommand, d.terminal.agentCommand),
+      startAgent: typeof terminal.startAgent === 'boolean' ? terminal.startAgent : d.terminal.startAgent,
     },
     eslint: { enabled: typeof eslint.enabled === 'boolean' ? eslint.enabled : d.eslint.enabled },
     markdown: {
       defaultLayout: LAYOUTS.includes(markdown.defaultLayout as MarkdownDefaultLayout) ? (markdown.defaultLayout as MarkdownDefaultLayout) : d.markdown.defaultLayout,
     },
+    system: { reopenProjects: typeof system.reopenProjects === 'boolean' ? system.reopenProjects : d.system.reopenProjects },
   }
 }
 

@@ -13,12 +13,14 @@ describe('settings', () => {
       terminal: { fontSize: 2.6, shell: ' /bin/bash ', agentCommand: 42 },
       eslint: { enabled: 'no' },
       markdown: { defaultLayout: 'sideways' },
+      system: { reopenProjects: 'yes' },
     })
     expect(settings).toEqual({
       editor: { fontSize: 32, lineHeight: 20 },
-      terminal: { fontSize: 8, shell: '/bin/bash', agentCommand: 'claude' },
+      terminal: { fontSize: 8, shell: '/bin/bash', agentCommand: 'claude', startAgent: false },
       eslint: { enabled: true },
       markdown: { defaultLayout: 'auto' },
+      system: { reopenProjects: false },
     })
   })
 

@@ -186,6 +186,19 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
         })
         return result
       }
+      // Like IntelliJ's Window menu: the other windows' projects come here as tabs.
+      const merge = otherWindows.length > 0 ? rank(query, [{ text: 'Merge All Project Windows' }], (a) => a.text)[0] : undefined
+      if (merge) {
+        result.push({
+          key: 'action:MergeAllWindowsAction',
+          group: 'Actions',
+          label: 'Merge All Project Windows',
+          shortcut: shortcutFor('MergeAllWindowsAction'),
+          positions: merge.match.positions,
+          labelOffset: 0,
+          run: () => performAction('MergeAllWindowsAction'),
+        })
+      }
       const open = rank(query, [{ id: 'OpenFile', text: 'Open…' }], (a) => a.text)[0]
       if (open) {
         result.push({
@@ -456,7 +469,7 @@ function SearchPopup({ kind }: { kind: PopupKind }) {
   )
 }
 
-function highlight(label: string, positions: readonly number[], offset: number): ReactNode {
+export function highlight(label: string, positions: readonly number[], offset: number): ReactNode {
   const marks = new Set(positions.map((p) => p - offset).filter((p) => p >= 0 && p < label.length))
   if (marks.size === 0) return label
   return [...label].map((ch, i) => (marks.has(i) ? <mark key={i}>{ch}</mark> : ch))

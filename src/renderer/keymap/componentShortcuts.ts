@@ -4,8 +4,9 @@
 // so components never read raw keys. Popup.Cancel/Popup.Confirm stand in for the Escape/Enter
 // handling of IntelliJ popups, EditSourceOnEnter for the project view's
 // EditSourceOnEnterKeyHandler and Commit.Execute for the commit message's ⌘⏎
-// (CommonShortcuts.getCtrlEnter); none of them has an action id there. These are "$default"
-// entries, so "control" becomes ⌘ on macOS.
+// (CommonShortcuts.getCtrlEnter); none of them has an action id there. The EditorSearchSession
+// toggles carry the ⌥C/⌥W/⌥X mnemonics of the Find in Files popup (FindPopupPanel). These are
+// "$default" entries, so "control" becomes ⌘ on macOS.
 export const COMPONENT_SHORTCUTS: readonly [actionId: string, keystrokes: readonly string[]][] = [
   ['Tree-selectPrevious', ['UP']],
   ['Tree-selectNext', ['DOWN']],
@@ -22,4 +23,7 @@ export const COMPONENT_SHORTCUTS: readonly [actionId: string, keystrokes: readon
   ['Commit.Execute', ['control ENTER']],
   ['Popup.Cancel', ['ESCAPE']],
   ['Popup.Confirm', ['ENTER']],
+  ['EditorSearchSession.ToggleMatchCase', ['alt C']],
+  ['EditorSearchSession.ToggleWholeWordsOnlyAction', ['alt W']],
+  ['EditorSearchSession.ToggleRegex', ['alt X']],
 ]

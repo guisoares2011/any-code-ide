@@ -100,6 +100,12 @@ test('Merge All Project Windows brings other windows in as tabs, and Move Tab to
     await page.keyboard.press('Enter')
   }
 
+  // The Projects popup offers the merge while other windows are open (also in Window › of the menu bar).
+  await page.locator('.main-toolbar').getByRole('button', { name: name(project) }).click()
+  await page.keyboard.type('merge')
+  await expect(page.getByRole('dialog', { name: 'Projects' }).getByRole('option', { name: /Merge All Project Windows/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+
   await findAction('Merge All Project Windows')
   await expect.poll(() => app.windows().length).toBe(1)
   const projectTabs = page.getByRole('tablist', { name: 'Projects' })
@@ -191,9 +197,10 @@ test('New Window opens the project in its own window, with its own Claude Code l
   await expect(page.locator('.main-toolbar')).toContainText(name(project))
 })
 
-test('a start from the Dock reopens every window of the previous session', async () => {
+test('with "Reopen projects on startup", a start from the Dock reopens every window of the previous session', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'anycode-userdata-'))
   const claudeConfigDir = await mkdtemp(join(tmpdir(), 'anycode-claude-'))
+  await writeFile(join(userData, 'settings.json'), JSON.stringify({ system: { reopenProjects: true } }))
   await writeFile(join(userData, 'open-projects.json'), JSON.stringify({ windows: [{ roots: [fixture.project], current: fixture.project }, { roots: [second], current: second }] }))
   // cwd "/" and no --project: what the Dock does.
   const app = await electron.launch({
@@ -210,6 +217,49 @@ test('a start from the Dock reopens every window of the previous session', async
   )
   const names = toolbars.map((t) => t.split('\n').pop()!.trim())
   expect(names.sort()).toEqual([name(fixture.project), name(second)].sort())
+  await app.close()
+  await rm(userData, { recursive: true, force: true })
+  await rm(claudeConfigDir, { recursive: true, force: true })
+})
+
+test('a start from the Dock shows the Welcome screen, which opens recent projects and comes back after Close Project', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'anycode-userdata-'))
+  const claudeConfigDir = await mkdtemp(join(tmpdir(), 'anycode-claude-'))
+  // The previous session is not reopened: "Reopen projects on startup" is off by default.
+  await writeFile(join(userData, 'open-projects.json'), JSON.stringify({ windows: [{ roots: [fixture.project], current: fixture.project }] }))
+  await writeFile(join(userData, 'recent-projects.json'), JSON.stringify([{ path: second, name: name(second), source: 'AnyCode', lastOpened: Date.now() }]))
+  const app = await electron.launch({
+    args: [resolve('out/main/index.js')],
+    cwd: '/',
+    env: { ...process.env, ANYCODE_HEADLESS: '1', ANYCODE_AGENT_COMMAND: '', CLAUDE_CONFIG_DIR: claudeConfigDir, ANYCODE_USER_DATA: userData },
+  })
+  const page = await app.firstWindow()
+  const recent = page.getByRole('listbox', { name: 'Recent projects' })
+  await expect(recent.getByRole('option', { name: new RegExp(name(second)) })).toBeVisible()
+  await expect(page.locator('.workbench')).toHaveCount(0)
+  expect(await page.title()).toBe('Welcome to AnyCode')
+
+  // Search, then Enter opens the project in this window.
+  await page.getByRole('textbox', { name: 'Search projects' }).fill(name(second))
+  await expect(recent.getByRole('option')).toHaveCount(1)
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.main-toolbar')).toContainText(name(second))
+  expect(app.windows()).toHaveLength(1)
+
+  // Closing the only project of the only window brings the Welcome screen back.
+  await page.locator('.workbench-body').first().click({ position: { x: 5, y: 5 } })
+  await page.keyboard.press('Meta+Shift+KeyA')
+  await page.keyboard.type('Close Project')
+  await expect(page.locator('.popup-item').first()).toContainText('Close Project')
+  await page.keyboard.press('Enter')
+  await expect(recent).toBeVisible()
+
+  // Remove from Recent Projects.
+  await recent.getByRole('option', { name: new RegExp(name(second)) }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Remove from Recent Projects…' }).click()
+  await page.getByRole('dialog', { name: 'Remove Recent Project' }).getByRole('button', { name: 'Remove' }).click()
+  await expect(recent.getByRole('option', { name: new RegExp(name(second)) })).toHaveCount(0)
+
   await app.close()
   await rm(userData, { recursive: true, force: true })
   await rm(claudeConfigDir, { recursive: true, force: true })

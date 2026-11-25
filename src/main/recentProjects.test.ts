@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeRecent, parseJetBrainsRecent, parseOpenProjects, productName } from './recentProjects'
+import { mergeRecent, parseJetBrainsRecent, parseOpenProjects, productName, visibleRecent } from './recentProjects'
 
 const XML = `<application>
   <component name="RecentProjectsManager">
@@ -48,6 +48,14 @@ describe('recent projects', () => {
       ],
     )
     expect(merged.map((p) => `${p.path}:${p.source}`)).toEqual(['/a:AnyCode', '/b:IntelliJ IDEA'])
+  })
+
+  it('hides removed projects until an IDE opens them again', () => {
+    const anycode = [{ path: '/a', name: 'a', source: 'AnyCode', lastOpened: 5, hidden: true }]
+    expect(visibleRecent(anycode, [{ path: '/a', name: 'a', source: 'WebStorm', lastOpened: 4 }])).toEqual([])
+    expect(visibleRecent(anycode, [{ path: '/a', name: 'a', source: 'WebStorm', lastOpened: 6 }])).toEqual([
+      { path: '/a', name: 'a', source: 'WebStorm', lastOpened: 6 },
+    ])
   })
 })
 

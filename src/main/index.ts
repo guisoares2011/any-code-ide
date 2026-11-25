@@ -1,22 +1,23 @@
 import { mkdirSync, statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { app, BrowserWindow, dialog, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, Menu, MenuItem, shell, type WebContents } from 'electron'
 import type { ProjectInfo } from '@shared/ipc'
 import { basename } from '@shared/paths'
 import { createBridge, failPendingToolCalls, registerBridgeHandlers } from './bridge'
 import type { IdeBridgeServer } from './bridge/server'
 import { registerFsHandlers } from './fs'
 import { registerScratchHandlers } from './scratches'
+import { registerSearchHandlers } from './search'
 import { registerEslintHandlers, stopAllEslint, stopEslint } from './eslint/index'
 import { registerGitHandlers } from './git'
 import { currentSettings, registerSettingsHandlers, userShell } from './settings'
-import { emit, handle, handleFrom, onSendFrom } from './ipc'
+import { emit, handle, handleFrom, onSend, onSendFrom } from './ipc'
 import { registerLspHandlers, stopAllLanguageServers } from './lsp/manager'
 import { registerDebugHandlers, stopDebugging } from './debug/index'
 import { homedir } from 'node:os'
 import { closeProject, explicitProject, openProject } from './project'
-import { mergeRecent, OpenProjectsStore, readJetBrainsRecent, RecentProjectsStore, type SavedWindow } from './recentProjects'
+import { OpenProjectsStore, readJetBrainsRecent, RecentProjectsStore, visibleRecent, type SavedWindow } from './recentProjects'
 import { killAllPtys, registerPtyHandlers } from './pty'
 import { registerRunHandlers } from './runConfigurations/index'
 import { adoptShellEnv } from './shellEnv'
@@ -40,6 +41,9 @@ const SCREENSHOT_DEADLINE_MS = 60_000
 
 // Islands Dark token `container-main-window-bg`; shown before the renderer paints.
 const WINDOW_BACKGROUND = '#26282C'
+// A project window, and the smaller Welcome screen of a window without projects (IntelliJ's sizes).
+const PROJECT_SIZE = { width: 1440, height: 900 }
+const WELCOME_SIZE = { width: 800, height: 650 }
 
 const explicit = explicitProject(process.argv, process.env, process.cwd(), homedir())
 
@@ -64,12 +68,11 @@ const ownerOf = (root: string): ProjectWindow | undefined => [...windows.values(
 const projectInfo = (root: string): ProjectInfo => ({ root, name: basename(root) })
 let quitting = false
 
-function createBrowserWindow(): BrowserWindow {
+function createBrowserWindow(welcome: boolean): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 800,
-    minHeight: 500,
+    ...(welcome ? WELCOME_SIZE : PROJECT_SIZE),
+    minWidth: 600,
+    minHeight: 400,
     show: false,
     backgroundColor: WINDOW_BACKGROUND,
     title: 'AnyCode',
@@ -109,7 +112,7 @@ function persist(): void {
 /** Opens a window with these projects (those already open in another window are skipped). */
 async function openWindow(roots: readonly string[], current: string | null, resume: string[] = []): Promise<ProjectWindow> {
   const opened = roots.filter((root) => !ownerOf(resolve(root))).flatMap((root) => openProject(root)?.root ?? [])
-  const window = createBrowserWindow()
+  const window = createBrowserWindow(opened.length === 0)
   const entry: ProjectWindow = {
     window,
     contents: window.webContents,
@@ -149,6 +152,7 @@ function closeWindow(entry: ProjectWindow): void {
 }
 
 function releaseProject(root: string): void {
+  agentRoots.delete(root)
   closeProject(root)
   stopEslint(root)
   watchers.get(root)?.()
@@ -163,9 +167,22 @@ function focusWindow(entry: ProjectWindow, root?: string): void {
   entry.window.focus()
 }
 
-/** The previous session's windows, or only the project named on the command line. */
+/** A window that gained its first project grows to a project window; one left without projects shows the Welcome screen. */
+function resizeForProjects(entry: ProjectWindow, hadProjects: boolean): void {
+  const hasProjects = entry.roots.length > 0
+  if (hasProjects === hadProjects || entry.window.isFullScreen()) return
+  if (entry.window.isMaximized()) entry.window.unmaximize()
+  const size = hasProjects ? PROJECT_SIZE : WELCOME_SIZE
+  entry.window.setSize(size.width, size.height)
+  entry.window.center()
+}
+
+/**
+ * The project named on the command line; else the previous session's windows when "Reopen projects
+ * on startup" is on; else the Welcome screen.
+ */
 async function restoreSession(): Promise<void> {
-  const saved = explicit ? [{ roots: [explicit], current: explicit }] : await session.read()
+  const saved = explicit ? [{ roots: [explicit], current: explicit }] : currentSettings().system.reopenProjects ? await session.read() : []
   if (saved.length === 0) await openWindow([], null)
   for (const w of saved) await openWindow(w.roots, w.current)
 }
@@ -178,13 +195,27 @@ async function captureScreenshot(window: BrowserWindow, path: string): Promise<v
   console.log(`[anycode] screenshot saved to ${target}`)
 }
 
-/** Agent tab command: ANYCODE_AGENT_COMMAND, else the setting ("" = plain shell); headless runs default to a shell. */
+/** Agent session command: ANYCODE_AGENT_COMMAND, else the setting ("" = none); headless runs default to none. */
 function agentCommand(): string[] | null {
   const configured = process.env.ANYCODE_AGENT_COMMAND ?? (headless ? '' : currentSettings().terminal.agentCommand)
   return configured.trim() ? configured.trim().split(/\s+/) : null
 }
 
-handle('app:info', () => ({ platform: process.platform, headless, version: app.getVersion(), agentCommand: agentCommand() }))
+handle('app:info', () => ({
+  platform: process.platform,
+  headless,
+  version: app.getVersion(),
+  home: homedir(),
+  agentCommand: agentCommand(),
+  startAgent: !headless && currentSettings().terminal.startAgent,
+}))
+
+/** Projects whose agent session is running: moved to another window, their conversation resumes there. */
+const agentRoots = new Set<string>()
+onSend('project:agentState', (root, running) => {
+  if (running) agentRoots.add(root)
+  else agentRoots.delete(root)
+})
 const session = new OpenProjectsStore(join(app.getPath('userData'), 'open-projects.json'))
 const recent = new RecentProjectsStore(join(app.getPath('userData'), 'recent-projects.json'))
 
@@ -203,6 +234,7 @@ onSendFrom('project:activated', (sender, root) => {
 })
 registerSettingsHandlers(join(app.getPath('userData'), 'settings.json'))
 registerFsHandlers()
+registerSearchHandlers()
 const scratchesDir = join(app.getPath('userData'), 'scratches')
 registerScratchHandlers(scratchesDir)
 registerGitHandlers()
@@ -234,8 +266,10 @@ handleFrom('project:open', async (sender, path) => {
   const entry = windowOf(sender)
   const opened = openProject(path)
   if (!entry || !opened) return null
+  const hadProjects = entry.roots.length > 0
   if (!entry.roots.includes(opened.root)) entry.roots.push(opened.root)
   entry.current = opened.root
+  resizeForProjects(entry, hadProjects)
   watch(opened.root)
   await recent.touch(opened.root)
   await entry.bridge.updateWorkspaceFolders()
@@ -248,6 +282,12 @@ handleFrom('project:close', async (sender, root) => {
   entry.roots = entry.roots.filter((r) => r !== root)
   if (entry.current === root) entry.current = entry.roots[0] ?? null
   releaseProject(root)
+  // Its last project closed: the window goes away while others remain, else it shows the Welcome screen.
+  if (entry.roots.length === 0 && windows.size > 1) {
+    entry.window.close()
+    return
+  }
+  resizeForProjects(entry, true)
   await entry.bridge.updateWorkspaceFolders()
   persist()
 })
@@ -298,18 +338,20 @@ handleFrom('window:mergeAll', async (sender) => {
   target.roots.push(...moved)
   await target.bridge.updateWorkspaceFolders()
   persist()
-  return moved.map(projectInfo)
+  return moved.map((root) => ({ project: projectInfo(root), resume: agentRoots.has(root) }))
 })
-handleFrom('project:moveToNewWindow', async (sender, root) => {
+handleFrom('project:moveToNewWindow', async (sender, root, resumeAgent) => {
   const entry = windowOf(sender)
   if (!entry?.roots.includes(root)) return false
   entry.roots = entry.roots.filter((r) => r !== root)
   if (entry.current === root) entry.current = entry.roots[0] ?? null
+  agentRoots.delete(root)
   await entry.bridge.updateWorkspaceFolders()
-  await openWindow([root], root, [root])
+  await openWindow([root], root, resumeAgent ? [root] : [])
   return true
 })
-handle('project:recent', async () => mergeRecent(await recent.read(), readJetBrainsRecent()))
+handle('project:recent', async () => visibleRecent(await recent.read(), readJetBrainsRecent()))
+handle('project:forgetRecent', (path) => recent.forget(path))
 handleFrom('project:pickFolder', async (sender) => {
   const parent = BrowserWindow.fromWebContents(sender)
   if (headless || !parent) return null
@@ -340,7 +382,33 @@ if (exitAfterScreenshot) {
   }, SCREENSHOT_DEADLINE_MS).unref()
 }
 
+/** Sends a menu item's action to the focused window's renderer, which performs it like a shortcut would. */
+function menuAction(label: string, actionId: string): MenuItem {
+  return new MenuItem({
+    label,
+    click: (_item, window) => {
+      const target = window instanceof BrowserWindow ? window : BrowserWindow.getFocusedWindow()
+      if (target) emit(target.webContents, 'menu:action', actionId)
+    },
+  })
+}
+
+/**
+ * IntelliJ's Window menu on macOS: Electron's default menu, with Merge All Project Windows and Move
+ * Tab to New Window added to its Window submenu. No accelerators: shortcuts stay with the keymap.
+ */
+function installApplicationMenu(): void {
+  const menu = Menu.getApplicationMenu()
+  const windowMenu = menu?.items.find((item) => item.role?.toLowerCase() === 'windowmenu')?.submenu
+  if (!menu || !windowMenu) return
+  windowMenu.append(new MenuItem({ type: 'separator' }))
+  windowMenu.append(menuAction('Merge All Project Windows', 'MergeAllWindowsAction'))
+  windowMenu.append(menuAction('Move Tab to New Window', 'AnyCode.MoveTabToNewWindow'))
+  Menu.setApplicationMenu(menu)
+}
+
 void app.whenReady().then(async () => {
+  if (process.platform === 'darwin') installApplicationMenu()
   // Before any terminal, language server or build starts: they all need the user's PATH.
   await adoptShellEnv(userShell())
   await restoreSession()

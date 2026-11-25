@@ -1,5 +1,6 @@
 import { EditorArea } from '../editor/EditorArea'
 import { useActions } from '../keymap/service'
+import { FindInFilesHost } from '../find/FindInFilesPopup'
 import { PopupHost } from '../popups/SearchPopup'
 import { RunConfigurationsDialog } from '../run/RunConfigurationsDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
@@ -79,6 +80,7 @@ export function Workbench() {
       </div>
       <StatusBar />
       <PopupHost />
+      <FindInFilesHost />
       <RunConfigurationsDialog />
       <VcsActions />
       <OpenProjectDialog />

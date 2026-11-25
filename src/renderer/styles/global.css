@@ -269,13 +269,14 @@ button {
 .project-avatar {
   display: grid;
   place-items: center;
+  flex: none;
   width: 20px;
   height: 20px;
   border-radius: 4px;
   font-size: 10px;
   font-weight: 700;
   color: var(--c-text-over-accent);
-  background: linear-gradient(135deg, var(--ui-RecentProject-Color5-Avatar-Start), var(--ui-RecentProject-Color5-Avatar-End));
+  background: linear-gradient(135deg, var(--avatar-start, var(--ui-RecentProject-Color5-Avatar-Start)), var(--avatar-end, var(--ui-RecentProject-Color5-Avatar-End)));
 }
 
 /* ── Stripes ────────────────────────────────────────────────────────────── */
@@ -397,6 +398,17 @@ button {
 
 .icon-button:hover {
   background: var(--c-toolbar-bg-hovered);
+}
+
+.icon-button.labeled {
+  width: auto;
+  padding: 0 8px;
+  color: var(--c-text-secondary);
+  white-space: nowrap;
+}
+
+.icon-button.labeled:hover {
+  color: var(--c-text-default);
 }
 
 .icon-button.small {
@@ -733,6 +745,160 @@ button {
   background: var(--ui-Popup-Advertiser-background);
   font-size: var(--font-size-small);
   border-top: 1px solid var(--c-container-popup-border);
+}
+
+/* ── Find in Files (FindPopupPanel) ─────────────────────────────────────── */
+
+.popup.find-popup {
+  width: min(960px, 90vw);
+  height: min(760px, 80vh);
+  max-height: none;
+}
+
+.find-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 0;
+}
+
+.find-title {
+  font-weight: 600;
+}
+
+.find-summary {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.find-summary.error {
+  color: var(--c-text-error, var(--c-text-muted));
+}
+
+.find-mask {
+  margin-left: auto;
+  color: var(--c-text-secondary);
+}
+
+.find-mask .text-field {
+  width: 180px;
+  height: 26px;
+}
+
+.find-scopes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+}
+
+.find-directory {
+  flex: 1;
+  height: 26px;
+  margin-left: 8px;
+}
+
+.find-field {
+  margin-bottom: 0;
+}
+
+.find-field + .find-field {
+  margin-top: 6px;
+}
+
+.find-toggle {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--c-text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-size-small);
+}
+
+.find-toggle:hover {
+  background: var(--c-toolbar-bg-hovered);
+}
+
+.find-toggle.selected {
+  background: var(--c-toolbar-selected-bg);
+  color: var(--c-text-default);
+}
+
+.find-results {
+  flex: 1;
+  min-height: 80px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 0 8px;
+  border-top: 1px solid var(--c-container-popup-border);
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--component-radius);
+  white-space: nowrap;
+}
+
+.find-row.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.find-row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-size-small);
+}
+
+.find-row-text mark {
+  background: var(--c-search-match-bg);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.find-row-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--c-text-muted);
+}
+
+.find-row-line {
+  color: var(--c-text-muted);
+}
+
+.find-preview {
+  flex: 0 0 38%;
+  min-height: 120px;
+  border-top: 1px solid var(--c-container-popup-border);
+}
+
+.find-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--c-container-popup-border);
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.find-footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.button:disabled {
+  opacity: 0.5;
 }
 
 /* ── Scrollbars (ScrollBar.Transparent.*) ───────────────────────────────── */
@@ -1859,4 +2025,171 @@ button {
 
 .breakpoint-location {
   cursor: default;
+}
+
+/* ── Welcome screen (a window without projects) ─────────────────────────── */
+
+.welcome {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: var(--toolbar-height) 1fr;
+  height: 100%;
+  background: var(--ui-WelcomeScreen-Details-background);
+}
+
+.welcome-title {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  border-bottom: 1px solid var(--c-container-tool-window-border);
+  color: var(--c-text-secondary);
+  font-weight: 600;
+  -webkit-app-region: drag;
+}
+
+.welcome-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 20px 12px 12px;
+  background: var(--ui-WelcomeScreen-SidePanel-background);
+  border-right: 1px solid var(--c-container-tool-window-border);
+}
+
+.welcome-app {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.welcome-app-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.welcome-app-version {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.welcome-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-nav-item {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--component-radius);
+  text-align: left;
+  color: var(--c-text-default);
+}
+
+.welcome-nav-item.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.welcome-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.welcome-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--c-container-tool-window-border);
+}
+
+.welcome-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-text-muted);
+}
+
+.welcome-search input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--c-text-default);
+  font: inherit;
+  user-select: text;
+}
+
+.welcome-error {
+  margin: 8px 20px 0;
+  color: var(--c-text-error);
+}
+
+.welcome-projects {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.welcome-project {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--component-radius);
+  cursor: default;
+}
+
+.welcome-project:hover {
+  background: var(--c-selection-bg-hovered);
+}
+
+.welcome-project.selected {
+  background: var(--c-selection-bg-active);
+}
+
+.welcome-project-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-project-name,
+.welcome-project-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-project-name mark {
+  background: none;
+  color: var(--c-popup-completion-match-text);
+  font-weight: 600;
+}
+
+.welcome-project-path {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.welcome-project-more {
+  visibility: hidden;
+}
+
+.welcome-project:hover .welcome-project-more,
+.welcome-project.selected .welcome-project-more {
+  visibility: visible;
+}
+
+.welcome-project .project-avatar {
+  border-radius: 6px;
+  font-family: var(--font-mono);
 }

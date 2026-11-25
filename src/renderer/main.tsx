@@ -15,11 +15,19 @@ import { installTestSupport } from './run/testSupport'
 import { installEslint } from './lint/eslint'
 import { installSettings } from './settings/applySettings'
 import { installGitStatus } from './state/git'
-import { installKeymapDispatcher } from './keymap/service'
+import { installKeymapDispatcher, performAction } from './keymap/service'
+import { useStore } from './state/store'
 import { switchProject, workbench } from './state/workbench'
 import { resumeAgent } from './terminal/TerminalView'
 import { applyIslandsDark } from './theme/applyTheme'
+import { WelcomeScreen } from './workbench/WelcomeScreen'
 import { Workbench } from './workbench/Workbench'
+
+/** A window without projects shows the Welcome screen. */
+function App() {
+  const hasProject = useStore(workbench, (s) => s.project !== null)
+  return hasProject ? <Workbench /> : <WelcomeScreen />
+}
 
 async function main(): Promise<void> {
   applyIslandsDark()
@@ -37,24 +45,25 @@ async function main(): Promise<void> {
   const project = projects.find((p) => p.root === current) ?? null
   workbench.set({ project, projects })
   // Remember the shown project for the next start and keep the window title in sync.
-  let shown: string | null = null
+  let shown: string | null | undefined
   const syncProject = (): void => {
     const root = workbench.get().project?.root ?? null
     if (root === shown) return
     shown = root
-    document.title = workbench.get().project?.name ?? 'AnyCode'
+    document.title = workbench.get().project?.name ?? 'Welcome to AnyCode'
     if (root) window.anycode.send('project:activated', root)
   }
   workbench.subscribe(syncProject)
   syncProject()
   // Another window asked to open a project this one has: show it.
   window.anycode.on('project:reveal', (root) => switchProject(root))
-  if (!project) workbench.set({ popup: 'Projects' })
+  // Window › Merge All Project Windows and the other application menu items.
+  window.anycode.on('menu:action', (actionId) => void performAction(actionId))
   installGitStatus()
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Workbench />
+      <App />
     </StrictMode>,
   )
 

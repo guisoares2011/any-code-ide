@@ -141,6 +141,12 @@ describe('macOS keymap from the IntelliJ 2026.1 XMLs', () => {
     ['EvaluateExpression', 'alt F8'],
     ['ShowExecutionPoint', 'alt F10'],
     ['Console.Execute', 'ENTER'],
+    // Find in Files / Replace in Files and the popup's toggles (componentShortcuts.ts).
+    ['FindInPath', 'shift meta F'],
+    ['ReplaceInPath', 'shift meta R'],
+    ['EditorSearchSession.ToggleMatchCase', 'alt C'],
+    ['EditorSearchSession.ToggleWholeWordsOnlyAction', 'alt W'],
+    ['EditorSearchSession.ToggleRegex', 'alt X'],
     // Editor font size (⌘+wheel is the editor's own behavior, not a keymap entry).
     ['EditorIncreaseFontSizeGlobal', 'control shift PERIOD'],
     ['EditorDecreaseFontSizeGlobal', 'control shift COMMA'],

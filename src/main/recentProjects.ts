@@ -80,8 +80,8 @@ export function readJetBrainsRecent(home = homedir()): RecentProject[] {
 }
 
 /** Newest entry per path, newest first. */
-export function mergeRecent(...lists: RecentProject[][]): RecentProject[] {
-  const byPath = new Map<string, RecentProject>()
+export function mergeRecent<T extends RecentProject>(...lists: T[][]): T[] {
+  const byPath = new Map<string, T>()
   for (const project of lists.flat()) {
     const existing = byPath.get(project.path)
     if (!existing || project.lastOpened > existing.lastOpened) byPath.set(project.path, project)
@@ -89,19 +89,43 @@ export function mergeRecent(...lists: RecentProject[][]): RecentProject[] {
   return [...byPath.values()].sort((a, b) => b.lastOpened - a.lastOpened).slice(0, MAX_RECENT)
 }
 
+/**
+ * An AnyCode entry; `hidden` marks a project removed from the list (Welcome screen). Being the newest
+ * entry for its path, it also hides what the JetBrains IDEs remember, until one of them opens it again.
+ */
+export interface StoredRecentProject extends RecentProject {
+  hidden?: boolean
+}
+
+/** The recent projects to show: newest per path, without the removed ones. */
+export function visibleRecent(...lists: StoredRecentProject[][]): RecentProject[] {
+  return mergeRecent<StoredRecentProject>(...lists)
+    .filter((p) => !p.hidden)
+    .map(({ path, name, source, lastOpened }) => ({ path, name, source, lastOpened }))
+}
+
 export class RecentProjectsStore {
   constructor(private readonly file: string) {}
 
-  async read(): Promise<RecentProject[]> {
+  async read(): Promise<StoredRecentProject[]> {
     try {
-      return JSON.parse(await readFile(this.file, 'utf8')) as RecentProject[]
+      return JSON.parse(await readFile(this.file, 'utf8')) as StoredRecentProject[]
     } catch {
       return []
     }
   }
 
   async touch(path: string): Promise<void> {
-    const list = mergeRecent(await this.read(), [{ path, name: basename(path), source: 'AnyCode', lastOpened: Date.now() }])
+    await this.write(mergeRecent(await this.read(), [{ path, name: basename(path), source: 'AnyCode', lastOpened: Date.now() }]))
+  }
+
+  /** Remove from Recent Projects: hides the path until it is opened again. */
+  async forget(path: string): Promise<void> {
+    const entry: StoredRecentProject = { path, name: basename(path), source: 'AnyCode', lastOpened: Date.now(), hidden: true }
+    await this.write(mergeRecent(await this.read(), [entry]))
+  }
+
+  private async write(list: StoredRecentProject[]): Promise<void> {
     await mkdir(dirname(this.file), { recursive: true })
     await writeFile(this.file, JSON.stringify(list, null, 2))
   }

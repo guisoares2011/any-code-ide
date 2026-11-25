@@ -16,7 +16,7 @@ export function openSettings(page: PageId = 'editor.font'): void {
 
 const closeSettings = (): void => settingsDialog.set({ page: null })
 
-type PageId = 'keymap' | 'editor.font' | 'tools.terminal' | 'languages.servers' | 'languages.eslint' | 'languages.markdown'
+type PageId = 'system' | 'keymap' | 'editor.font' | 'tools.terminal' | 'languages.servers' | 'languages.eslint' | 'languages.markdown'
 
 interface PageProps {
   draft: Settings
@@ -33,6 +33,7 @@ interface Page {
 }
 
 const PAGES: readonly Page[] = [
+  { id: 'system', path: ['Appearance & Behavior', 'System Settings'], keywords: 'reopen projects startup welcome screen', render: (p) => <SystemPage {...p} /> },
   { id: 'keymap', path: ['Keymap'], keywords: 'shortcut keyboard action', render: () => <KeymapPage /> },
   { id: 'editor.font', path: ['Editor', 'Font'], keywords: 'size line height', render: (p) => <FontPage {...p} /> },
   { id: 'tools.terminal', path: ['Tools', 'Terminal'], keywords: 'shell path agent claude command font size', render: (p) => <TerminalPage {...p} /> },
@@ -213,10 +214,27 @@ function TerminalPage({ draft, update }: PageProps) {
       <Field label="Shell path" hint="Empty uses $SHELL. Applies to new terminals and runs.">
         <input className="text-field" placeholder="$SHELL" spellCheck={false} value={draft.terminal.shell} onChange={(e) => terminal({ shell: e.target.value })} />
       </Field>
-      <Field label="Agent command" hint="Opened in each project's first terminal tab. Empty opens a shell.">
+      <Field label="Agent command" hint="Run by New Claude Session (the Claude button of the Terminal). Empty disables it.">
         <input className="text-field" placeholder="claude" spellCheck={false} value={draft.terminal.agentCommand} onChange={(e) => terminal({ agentCommand: e.target.value })} />
       </Field>
+      <label className="checkbox-field">
+        <input type="checkbox" checked={draft.terminal.startAgent} onChange={(e) => terminal({ startAgent: e.target.checked })} />
+        Start the agent when a project opens
+      </label>
+      <div className="hint">Off: the first terminal tab is a shell, and the agent starts from New Claude Session.</div>
       <NumberField label="Font size" value={draft.terminal.fontSize} range={FONT_SIZE_RANGE} onChange={(fontSize) => terminal({ fontSize })} />
+    </div>
+  )
+}
+
+function SystemPage({ draft, update }: PageProps) {
+  return (
+    <div className="form">
+      <label className="checkbox-field">
+        <input type="checkbox" checked={draft.system.reopenProjects} onChange={(e) => update((d) => ({ ...d, system: { reopenProjects: e.target.checked } }))} />
+        Reopen projects on startup
+      </label>
+      <div className="hint">Off: AnyCode starts on the Welcome screen. A project named on the command line, or the folder AnyCode was started from in a terminal, always opens.</div>
     </div>
   )
 }

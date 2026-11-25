@@ -1,6 +1,6 @@
 // Opening, switching and closing projects in the single window.
 import { closeProjectSessions } from '../terminal/ptySessions'
-import { forgetAgent, resumeAgent } from '../terminal/TerminalView'
+import { agentRunning, forgetAgent, resumeAgent } from '../terminal/TerminalView'
 import { askOpenTarget } from '../workbench/OpenProjectDialog'
 import { notify } from './notifications'
 import { addProject, removeProject, switchProject, workbench } from './workbench'
@@ -46,28 +46,29 @@ export async function closeCurrentProject(): Promise<void> {
 
 /** Closes a project tab: its terminals and runs stop and the next tab is shown. */
 export async function closeProjectTab(root: string): Promise<void> {
-  closeProjectSessions(root)
   forgetAgent(root)
+  closeProjectSessions(root)
   removeProject(root)
   await window.anycode.invoke('project:close', root)
 }
 
 /** MergeAllWindowsAction: every other window's projects become tabs here, the shown tab unchanged. */
 export async function mergeAllProjectWindows(): Promise<void> {
-  for (const project of await window.anycode.invoke('window:mergeAll')) {
-    resumeAgent(project.root)
+  for (const { project, resume } of await window.anycode.invoke('window:mergeAll')) {
+    if (resume) resumeAgent(project.root)
     addProject(project, false)
   }
 }
 
-/** Move Tab to New Window: the current project tab leaves for its own window (its agent resumes there). */
+/** Move Tab to New Window: the current project tab leaves for its own window (a running agent resumes there). */
 export async function moveProjectTabToNewWindow(): Promise<void> {
   const root = workbench.get().project?.root
   if (!root || workbench.get().projects.length < 2) return
-  closeProjectSessions(root)
+  const resume = agentRunning(root)
   forgetAgent(root)
+  closeProjectSessions(root)
   removeProject(root)
-  await window.anycode.invoke('project:moveToNewWindow', root)
+  await window.anycode.invoke('project:moveToNewWindow', root, resume)
 }
 
 /** The open project containing a path (the deepest root wins for nested projects). */

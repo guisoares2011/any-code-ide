@@ -4,11 +4,7 @@ import { gitState } from '../state/git'
 import { useStore } from '../state/store'
 import { openPopup, workbench } from '../state/workbench'
 import { Icon } from '../ui/Icon'
-
-function initials(name: string): string {
-  const words = name.split(/[\s_.-]+|(?=[A-Z])/).filter(Boolean)
-  return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? '')).toUpperCase() || '?'
-}
+import { ProjectAvatar } from '../ui/projectAvatar'
 
 export function MainToolbar() {
   const project = useStore(workbench, (s) => s.project)
@@ -18,7 +14,7 @@ export function MainToolbar() {
     <div className="main-toolbar">
       {project && (
         <button className="toolbar-widget" title={project.root} onClick={() => performAction('$LRU')}>
-          <span className="project-avatar">{initials(project.name)}</span>
+          <ProjectAvatar name={project.name} path={project.root} />
           <span>{project.name}</span>
           <Icon name="general/chevronDown" size={14} />
         </button>

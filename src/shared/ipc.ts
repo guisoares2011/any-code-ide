@@ -4,6 +4,7 @@ import type { GitBranchList, GitCommandResult, GitCommit, GitCommitDetails, GitL
 import type { LanguageServerId } from './languageServers'
 import type { MavenDependenciesResult, MavenModule } from './maven'
 import type { Settings } from './settings'
+import type { SearchRequest, SearchResult } from './textSearch'
 import type { JvmDebug, RunCommand, RunConfigurationSpec } from './runConfigurations'
 
 // IPC contract shared by main, preload and renderer. Every channel is declared here once;
@@ -13,11 +14,15 @@ export interface AppInfo {
   platform: NodeJS.Platform
   headless: boolean
   version: string
+  /** The user's home directory (recent project paths show as ~/…). */
+  home: string
   /**
    * Command line of the agent terminal tab, e.g. ["claude"]; null means a plain login shell
    * (default in headless runs so tests never start a real Claude session).
    */
   agentCommand: string[] | null
+  /** The agent starts in each project's first terminal tab (Settings › Tools › Terminal). */
+  startAgent: boolean
 }
 
 export interface ProjectInfo {
@@ -80,11 +85,13 @@ export interface InvokeChannels {
   'project:openWindow': { args: [path: string]; result: boolean }
   /** Projects open in the other windows, for the Projects popup. */
   'project:otherWindows': { args: []; result: ProjectInfo[] }
-  /** MergeAllWindowsAction: the projects of every other window become tabs of this one; returns them. */
-  'window:mergeAll': { args: []; result: ProjectInfo[] }
-  /** Move Tab to New Window: the project leaves this window for a new one. */
-  'project:moveToNewWindow': { args: [root: string]; result: boolean }
+  /** MergeAllWindowsAction: the projects of every other window become tabs of this one; returns them, `resume` when their agent was running. */
+  'window:mergeAll': { args: []; result: { project: ProjectInfo; resume: boolean }[] }
+  /** Move Tab to New Window: the project leaves this window for a new one; `resumeAgent` when its agent was running. */
+  'project:moveToNewWindow': { args: [root: string, resumeAgent: boolean]; result: boolean }
   'project:recent': { args: []; result: RecentProject[] }
+  /** Remove from Recent Projects (Welcome screen): hidden until the project is opened again. */
+  'project:forgetRecent': { args: [path: string]; result: void }
   /** Native folder picker; null when cancelled or in headless mode. */
   'project:pickFolder': { args: []; result: string | null }
   'fs:readDir': { args: [path: string]; result: DirEntry[] }
@@ -92,6 +99,8 @@ export interface InvokeChannels {
   'fs:writeFile': { args: [path: string, content: string]; result: void }
   /** An image inside a project as a data: URL (Markdown preview); null when missing or not an image. */
   'fs:readDataUrl': { args: [path: string]; result: string | null }
+  /** Find in Files on disk (a newer request from the same window cancels the running one). */
+  'search:find': { args: [request: SearchRequest]; result: SearchResult }
   /** Files of a project root, relative to it (git ls-files when available). */
   'fs:listFiles': { args: [root: string]; result: string[] }
   'fs:exists': { args: [path: string]; result: boolean }
@@ -182,6 +191,10 @@ export interface SendChannels {
   'app:rendererReady': []
   /** The project shown in the window changed (remembered for the next start). */
   'project:activated': [root: string]
+  /** Whether a project's agent session is running (its conversation resumes when the project moves to another window). */
+  'project:agentState': [root: string, running: boolean]
+  /** The Find in Files popup closed: the running search stops. */
+  'search:cancel': []
   /** NextProjectWindow / PreviousProjectWindow across windows. */
   'window:cycle': [delta: 1 | -1]
   /** Forwarded to Claude Code as the selection_changed notification. */
@@ -203,6 +216,8 @@ export interface EventChannels {
   'bridge:status': [status: BridgeStatus]
   /** Files or directories changed on disk under an opened project (absolute paths). */
   'fs:changed': [paths: string[]]
+  /** An application menu item was chosen: perform the action with this id. */
+  'menu:action': [actionId: string]
   /** Show this already open project (another window asked to open it). */
   'project:reveal': [root: string]
   'lsp:message': [sessionId: string, message: unknown]
@@ -223,11 +238,13 @@ export const INVOKE_CHANNELS = [
   'window:mergeAll',
   'project:moveToNewWindow',
   'project:recent',
+  'project:forgetRecent',
   'project:pickFolder',
   'fs:readDir',
   'fs:readFile',
   'fs:writeFile',
   'fs:listFiles',
+  'search:find',
   'fs:readDataUrl',
   'fs:exists',
   'fs:createFile',
@@ -280,9 +297,9 @@ export const INVOKE_CHANNELS = [
   'settings:set',
 ] as const satisfies readonly (keyof InvokeChannels)[]
 
-export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'window:cycle', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send', 'debug:send'] as const satisfies readonly (keyof SendChannels)[]
+export const SEND_CHANNELS = ['app:rendererReady', 'project:activated', 'project:agentState', 'search:cancel', 'window:cycle', 'bridge:selectionChanged', 'bridge:atMentioned', 'lsp:send', 'debug:send'] as const satisfies readonly (keyof SendChannels)[]
 
-export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'project:reveal', 'lsp:message', 'lsp:exit', 'debug:message', 'debug:closed'] as const satisfies readonly (keyof EventChannels)[]
+export const EVENT_CHANNELS = ['pty:data', 'pty:exit', 'bridge:toolCall', 'bridge:status', 'fs:changed', 'menu:action', 'project:reveal', 'lsp:message', 'lsp:exit', 'debug:message', 'debug:closed'] as const satisfies readonly (keyof EventChannels)[]
 
 export type InvokeChannel = keyof InvokeChannels
 export type InvokeArgs<C extends InvokeChannel> = InvokeChannels[C]['args']
